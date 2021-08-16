@@ -1,9 +1,8 @@
 import cv2 as cv
-from cv_bridge import CvBridge
 import math
 import numpy as np
 
-def find_markers(image):
+def findMarkers(image):
     """Method that find the ir markers given an image.
 
     Keyword arguments:
@@ -56,7 +55,7 @@ def find_markers(image):
 
     return contours, centers
 
-def hough_circles(image):
+def houghCircles(image):
     """
     Detect circle in a single image using the hough transform
 
