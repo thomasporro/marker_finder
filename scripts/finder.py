@@ -88,8 +88,7 @@ def findCenter(Image):
     bridge = CvBridge()
     image = bridge.imgmsg_to_cv2(Image, desired_encoding="mono8")
     image = image.astype(np.uint8)
-    cont, cent = findMarkers(image)
-    
+    cont, cent = findMarkers(image)  
 
 def listener():
     rospy.init_node('listener', anonymous=True)
