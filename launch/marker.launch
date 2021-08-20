@@ -4,8 +4,8 @@
     <node pkg="rosbag" type="play" name="replay" args="--clock -l /home/thomas/Documenti/MasterThesis/bagfiles/marker_calibration/marker_ir_test.bag"/>
 </group>
 
-<group ns="center_finder">
-    <node pkg="marker_finder" type="finder.py" name="finder" output="screen"/>
+<group ns="marker_finder">
+    <node pkg="marker_finder" type="marker_finder_node" name="finder" output="screen"/>
 </group>
 
 </launch>
