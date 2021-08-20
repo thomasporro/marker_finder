@@ -5,7 +5,14 @@
 </group>
 
 <group ns="marker_finder">
-    <node pkg="marker_finder" type="node" name="finder" output="screen"/>
+    <arg name="rate"        default="1000"  />
+    <arg name="outTopic"    default="image" />
+
+    <node pkg="marker_finder" type="node" name="finder" output="screen">
+        <param name="rate"           value="$(arg rate)"            />
+        <param name="outTopic"       value="$(arg outTopic)"        />
+
+    </node>
 </group>
 
 </launch>

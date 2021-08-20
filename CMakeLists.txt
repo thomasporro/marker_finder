@@ -12,7 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
 )
 
-find_package(OpenCV 4 REQUIRED)
+find_package(OpenCV REQUIRED)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -135,7 +135,7 @@ include_directories(
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
-add_executable(${PROJECT_NAME}_node src/main.cpp src/find_markers.cpp)
+add_executable(${PROJECT_NAME}_node src/main.cpp src/findMarkers.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -150,7 +150,7 @@ add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catk
 ## Specify libraries to link a library or executable target against
 target_link_libraries(${PROJECT_NAME}_node
   ${catkin_LIBRARIES}
-  ${OpenCv_LIBRARIES}
+  ${OpenCV_LIBRARIES}
 )
 
 #############
