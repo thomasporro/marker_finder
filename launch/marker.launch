@@ -5,7 +5,7 @@
 </group>
 
 <group ns="marker_finder">
-    <node pkg="marker_finder" type="marker_finder_node" name="finder" output="screen"/>
+    <node pkg="marker_finder" type="node" name="finder" output="screen"/>
 </group>
 
 </launch>
