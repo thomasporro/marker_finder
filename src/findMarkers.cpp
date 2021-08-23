@@ -61,12 +61,33 @@ std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point>> FindMark
 void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image){
     //TODO need to take the encoding from the info of the mesage
     cv_bridge::CvImagePtr imgPointer;
+    cv_bridge::CvImage imgPointerColor;
     try{
         imgPointer = cv_bridge::toCvCopy(image, sensor_msgs::image_encodings::MONO8);
     } catch (cv_bridge::Exception e){
         ROS_ERROR("cv_bridge error: %s", e.what());
     }
-    printf("%s", typeid(imgPointer->image).name());
-    FindMarkers::findCenters(imgPointer->image);
-    pub.publish(imgPointer->toImageMsg());
+    auto cont_cent = FindMarkers::findCenters(imgPointer->image);
+
+    cv::Mat colorImage = FindMarkers::drawMarkers(imgPointer->image, std::get<0>(cont_cent), std::get<1>(cont_cent));
+    imgPointerColor.header = imgPointer->header;
+    imgPointerColor.encoding = sensor_msgs::image_encodings::BGR8;
+    imgPointerColor.image = colorImage;
+
+    pub.publish(imgPointerColor.toImageMsg());
+};
+
+cv::Mat FindMarkers::drawMarkers(cv::Mat image, std::vector<std::vector<cv::Point>> contours, std::vector<cv::Point> centers){
+    cv::Scalar redColor(0, 0, 255);
+    cv::Scalar greenColor(0, 255, 0);
+    
+    cv::Mat tmpImage;
+    cv::cvtColor(image, tmpImage, cv::COLOR_GRAY2BGR);
+    
+    cv::drawContours(tmpImage, contours, -1, greenColor, 2);
+    for(unsigned i = 0; i < centers.size(); i++){
+        cv::circle(tmpImage, centers[i], 3, redColor, -1);
+    }
+
+    return tmpImage;
 };

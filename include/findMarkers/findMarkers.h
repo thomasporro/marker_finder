@@ -30,5 +30,5 @@ private:
     std::string getImageEncoding();
     std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point>> findCenters(cv::Mat image);
     void listenerCallback(const sensor_msgs::ImageConstPtr& Image);
-    void drawMarkers(cv::Mat image, std::tuple<std::vector<std::vector<cv::Point>> contours, std::vector<cv::Point> centers);
+    cv::Mat drawMarkers(cv::Mat image, std::vector<std::vector<cv::Point>> contours, std::vector<cv::Point> centers);
 };
