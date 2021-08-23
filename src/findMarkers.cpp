@@ -26,12 +26,47 @@ std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point>> FindMark
     cv::Mat element = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(15, 15));
     cv::dilate(gray, gray, element);
 
-    std::vector<std::vector<cv::Point>> lol;
-    std::vector<cv::Point> ehi;
-    return std::make_tuple(lol, ehi);
+    std::vector<std::vector<cv::Point>> allContours;
+    std::vector<cv::Vec4i> hier;
+    cv::findContours(gray, allContours, hier, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
+
+    std::vector<std::vector<cv::Point>> contours;
+    std::vector<cv::Point> centers;
+    std::vector<cv::Moments> momentsContours;
+
+    for(auto contour: allContours){
+        double perimeter = cv::arcLength(contour, true);
+        double area = cv::contourArea(contour);
+        if(perimeter == 0 || perimeter < 10)
+            continue;
+        else if(perimeter > 300)
+            return std::make_tuple(contours, centers);
+        double circularity = 4 * M_PI * (area / (perimeter * perimeter));
+        if(circularity > 0.8 && circularity < 1.2){
+            contours.push_back(contour);
+            momentsContours.push_back(cv::moments(contour));
+        }
+    }
+
+    for(auto moment: momentsContours){
+        int centerX = static_cast<int>(moment.m10/(moment.m00 + 1e-5));
+        int centerY = static_cast<int>(moment.m01/(moment.m00 + 1e-5));
+        centers.push_back(cv::Point2f(centerX, centerY));
+    }
+
+    return std::make_tuple(contours, centers);
 };
 
 
-void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& Image){
-    pub.publish(Image);
+void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image){
+    //TODO need to take the encoding from the info of the mesage
+    cv_bridge::CvImagePtr imgPointer;
+    try{
+        imgPointer = cv_bridge::toCvCopy(image, sensor_msgs::image_encodings::MONO8);
+    } catch (cv_bridge::Exception e){
+        ROS_ERROR("cv_bridge error: %s", e.what());
+    }
+    printf("%s", typeid(imgPointer->image).name());
+    FindMarkers::findCenters(imgPointer->image);
+    pub.publish(imgPointer->toImageMsg());
 };

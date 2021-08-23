@@ -53,7 +53,7 @@ def findMarkers(image):
             momentsContours.append(cv.moments(contour))
 
     # Find and print the center of the contour
-    for contour, moment in zip(contours, momentsContours):
+    for moment in momentsContours:
         centerX = int(moment["m10"] / moment["m00"])
         centerY = int(moment["m01"] / moment["m00"])
         centers.append((centerX, centerY))
