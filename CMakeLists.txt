@@ -10,6 +10,8 @@ project(marker_finder)
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   sensor_msgs
+  cv_bridge
+  image_transport
 )
 
 find_package(OpenCV REQUIRED)

@@ -3,12 +3,13 @@
 #include "opencv2/imgcodecs.hpp"
 #include "opencv2/highgui.hpp"
 #include "opencv2/core/core.hpp"
+#include <cv_bridge/cv_bridge.h>
 #include "image_transport/image_transport.h"
 
 
 class FindMarkers{
 public:
-    FindMarkers(){};
+    FindMarkers(): tsp(nodeHandle){};
     ~FindMarkers(){};
 
     void start();
@@ -22,8 +23,9 @@ private:
 
     Params params;
     ros::NodeHandle nodeHandle;
-    ros::Subscriber sub;
-    ros::Publisher pub;
+    image_transport::Subscriber sub;
+    image_transport::Publisher pub;
+    image_transport::ImageTransport tsp;
 
     std::string getImageEncoding();
     std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point>> findCenters(cv::Mat image);

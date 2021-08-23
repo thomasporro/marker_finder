@@ -11,8 +11,8 @@ void FindMarkers::start(){
     nodeHandle.getParam("inTopic", params.inTopic);
     nodeHandle.getParam("outTopic", params.outTopic);
     
-    sub = nodeHandle.subscribe(params.inTopic, params.rate, &FindMarkers::listenerCallback, this);
-
+    sub = tsp.subscribe(params.inTopic, params.rate, &FindMarkers::listenerCallback, this);
+    pub = tsp.advertise(params.outTopic, 1);
 };
 
 
@@ -32,4 +32,6 @@ std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point>> FindMark
 };
 
 
-void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& Image){};
+void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& Image){
+    pub.publish(Image);
+};
