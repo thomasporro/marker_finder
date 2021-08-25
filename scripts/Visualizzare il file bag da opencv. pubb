@@ -1,7 +1,0 @@
-Visualizzare il file bag da opencv. pubblicare il topic con l'immagin di input in un altro topic così possiamo visualizzare le immagini
-
-Tradurre in c++
-
-iai_kinect
-
-Sottoiscrivo al camerainfo e passo all'encoding al bridge di opencv

@@ -4,8 +4,17 @@
     <node pkg="rosbag" type="play" name="replay" args="--clock -l /home/thomas/Documenti/MasterThesis/bagfiles/marker_calibration/marker_ir_test.bag"/>
 </group>
 
-<group ns="center_finder">
-    <node pkg="marker_finder" type="finder.py" name="finder" output="screen"/>
+<group ns="marker_finder">
+    <arg name="rate"        default="1000"  />
+    <arg name="outTopic"    default="image" />
+
+    <node pkg="marker_finder" type="node" name="finder" output="screen">
+        <param name="rate"           value="$(arg rate)"            />
+        <param name="outTopic"       value="$(arg outTopic)"        />
+
+    </node>
 </group>
+
+<node pkg="rqt_image_view" type="rqt_image_view" name="image_view"/>
 
 </launch>
