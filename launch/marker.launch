@@ -6,11 +6,13 @@
 
 <group ns="marker_finder">
     <arg name="rate"        default="1000"  />
+    <arg name="inTopic"     default="/k01/ir/image_rect" />
     <arg name="outTopic"    default="image" />
 
     <node pkg="marker_finder" type="node" name="finder" output="screen">
         <param name="rate"           value="$(arg rate)"            />
         <param name="outTopic"       value="$(arg outTopic)"        />
+        <param name="inTopic"        value="$(arg inTopic)"         />
 
     </node>
 </group>

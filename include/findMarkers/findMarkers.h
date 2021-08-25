@@ -24,7 +24,7 @@ private:
     };
 
     Params params;
-    ros::NodeHandle nodeHandle;
+    ros::NodeHandle nodeHandle{"~"};
     image_transport::Subscriber sub;
     image_transport::Publisher pub;
     image_transport::ImageTransport tsp;

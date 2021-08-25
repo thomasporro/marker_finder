@@ -79,7 +79,7 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image){
     cv::Mat tmpImage;
 
     // In case of different encodings we can easily set them up
-    if(encoding.compare(FindMarkers::MONO16) == 1){
+    if(encoding.compare(FindMarkers::MONO16) == 0){
         imgPointer->image.convertTo(tmpImage, CV_8UC1, scaleFactor);
     } else {
         imgPointer->image.convertTo(tmpImage, CV_8UC1);
