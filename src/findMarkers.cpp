@@ -17,14 +17,14 @@ void FindMarkers::start(){
 
 
 std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point>> FindMarkers::findCenters(cv::Mat image){
-
     cv::Mat gray = image.clone();
+
     cv::GaussianBlur(gray, gray, cv::Size(5, 5), 0, 0, cv::BORDER_DEFAULT);
     cv::threshold(gray, gray, 250, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
 
     // Matrix used to dilate the image
     cv::Mat element = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(15, 15));
-    cv::dilate(gray, gray, element);
+    cv::dilate(gray, gray, element); 
 
     std::vector<std::vector<cv::Point>> allContours;
     std::vector<cv::Vec4i> hier;
@@ -34,20 +34,27 @@ std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point>> FindMark
     std::vector<cv::Point> centers;
     std::vector<cv::Moments> momentsContours;
 
+    // Checks for the length of the contour's perimeter and fot its area,
+    // then if computes if it fits in the formula of a circle. If it is true
+    // then save the contour and the center and their moments
     for(auto contour: allContours){
         double perimeter = cv::arcLength(contour, true);
         double area = cv::contourArea(contour);
+        // Skips the perimeters that are too small and if is present a too
+        // large perimetes it skips the entire frame
         if(perimeter == 0 || perimeter < 10)
             continue;
         else if(perimeter > 300)
-            return std::make_tuple(contours, centers);
+            return std::make_tuple(std::vector<std::vector<cv::Point>>(), std::vector<cv::Point>());
+        
         double circularity = 4 * M_PI * (area / (perimeter * perimeter));
-        if(circularity > 0.8 && circularity < 1.2){
+        if(circularity > 0.85 && circularity < 1.05){
             contours.push_back(contour);
             momentsContours.push_back(cv::moments(contour));
         }
     }
 
+    // Compute the centers using the moments
     for(auto moment: momentsContours){
         int centerX = static_cast<int>(moment.m10/(moment.m00 + 1e-5));
         int centerY = static_cast<int>(moment.m01/(moment.m00 + 1e-5));
@@ -83,11 +90,16 @@ cv::Mat FindMarkers::drawMarkers(cv::Mat image, std::vector<std::vector<cv::Poin
     
     cv::Mat tmpImage;
     cv::cvtColor(image, tmpImage, cv::COLOR_GRAY2BGR);
+
+    if(centers.size() <= 0 || contours.size()<=0)
+        return tmpImage;
     
     cv::drawContours(tmpImage, contours, -1, greenColor, 2);
     for(unsigned i = 0; i < centers.size(); i++){
-        cv::circle(tmpImage, centers[i], 3, redColor, -1);
+        cv::circle(tmpImage, centers[i], 3, redColor, cv::FILLED);
     }
 
     return tmpImage;
 };
+
+//TODO Sottoiscrivo al camerainfo e passo all'encoding al bridge di opencv
