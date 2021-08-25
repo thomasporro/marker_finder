@@ -9,6 +9,8 @@
 
 class FindMarkers{
 public:
+    const std::string MONO16 = "mono16";
+
     FindMarkers(): tsp(nodeHandle){};
     ~FindMarkers(){};
 

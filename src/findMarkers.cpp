@@ -66,17 +66,29 @@ std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point>> FindMark
 
 
 void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image){
-    //TODO need to take the encoding from the info of the mesage
+    std::string encoding = image->encoding;
+    double scaleFactor = 1/256.0;
+
     cv_bridge::CvImagePtr imgPointer;
     cv_bridge::CvImage imgPointerColor;
     try{
-        imgPointer = cv_bridge::toCvCopy(image, sensor_msgs::image_encodings::MONO8);
+        imgPointer = cv_bridge::toCvCopy(image);
     } catch (cv_bridge::Exception e){
         ROS_ERROR("cv_bridge error: %s", e.what());
     }
-    auto cont_cent = FindMarkers::findCenters(imgPointer->image);
+    cv::Mat tmpImage;
 
-    cv::Mat colorImage = FindMarkers::drawMarkers(imgPointer->image, std::get<0>(cont_cent), std::get<1>(cont_cent));
+    // In case of different encodings we can easily set them up
+    if(encoding.compare(FindMarkers::MONO16) == 1){
+        imgPointer->image.convertTo(tmpImage, CV_8UC1, scaleFactor);
+    } else {
+        imgPointer->image.convertTo(tmpImage, CV_8UC1);
+        ROS_WARN("No encoding compatible");
+    }
+        
+    auto cont_cent = FindMarkers::findCenters(tmpImage);
+
+    cv::Mat colorImage = FindMarkers::drawMarkers(tmpImage, std::get<0>(cont_cent), std::get<1>(cont_cent));
     imgPointerColor.header = imgPointer->header;
     imgPointerColor.encoding = sensor_msgs::image_encodings::BGR8;
     imgPointerColor.image = colorImage;
@@ -102,4 +114,7 @@ cv::Mat FindMarkers::drawMarkers(cv::Mat image, std::vector<std::vector<cv::Poin
     return tmpImage;
 };
 
-//TODO Sottoiscrivo al camerainfo e passo all'encoding al bridge di opencv
+// TODO possible improvings: 
+// - mask to detect the mean color value in order to discard the point that
+//   are in the dark
+// - check that all the circles found must have a similar size
