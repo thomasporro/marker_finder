@@ -1,22 +1,17 @@
 #include "findMarkers/findMarkers.h"
-#include "opencv2/imgproc.hpp"
-#include "opencv2/imgcodecs.hpp"
-#include "opencv2/highgui.hpp"
-#include "opencv2/core/core.hpp"
-#include "image_transport/image_transport.h"
 
 void FindMarkers::start(){
 
-    nodeHandle.getParam("rate", params.rate);
-    nodeHandle.getParam("inTopic", params.inTopic);
-    nodeHandle.getParam("outTopic", params.outTopic);
+    nodeHandle_.getParam("queue", params_.queue);
+    nodeHandle_.getParam("inTopic", params_.inTopic);
+    nodeHandle_.getParam("outTopic", params_.outTopic);
     
-    sub = tsp.subscribe(params.inTopic, params.rate, &FindMarkers::listenerCallback, this);
-    pub = tsp.advertise(params.outTopic, 1);
+    sub_ = tsp_.subscribe(params_.inTopic, params_.queue, &FindMarkers::listenerCallback, this);
+    pub_ = tsp_.advertise(params_.outTopic, 1);
 };
 
 
-std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point>> FindMarkers::findCenters(cv::Mat image){
+std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point>> FindMarkers::findCenters(cv::Mat image, double imageWidth){
     cv::Mat gray = image.clone();
 
     cv::GaussianBlur(gray, gray, cv::Size(5, 5), 0, 0, cv::BORDER_DEFAULT);
@@ -40,22 +35,24 @@ std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point>> FindMark
     for(auto contour: allContours){
         double perimeter = cv::arcLength(contour, true);
         double area = cv::contourArea(contour);
+        double diameter = perimeter / M_PI;
         // Skips the perimeters that are too small and if is present a too
         // large perimetes it skips the entire frame
-        if(perimeter == 0 || perimeter < 10)
+
+        if(diameter < FindMarkers::minDiameterRatio * imageWidth)
             continue;
-        else if(perimeter > 300)
+        else if(diameter > FindMarkers::maxDiameterRatio * imageWidth)
             return std::make_tuple(std::vector<std::vector<cv::Point>>(), std::vector<cv::Point>());
         
         double circularity = 4 * M_PI * (area / (perimeter * perimeter));
-        if(circularity > 0.85 && circularity < 1.05){
+        if(circularity > FindMarkers::minCircularity && circularity < maxCircularity){
             contours.push_back(contour);
             momentsContours.push_back(cv::moments(contour));
         }
     }
 
     // Compute the centers using the moments
-    for(auto moment: momentsContours){
+    for(const auto& moment: momentsContours){
         int centerX = static_cast<int>(moment.m10/(moment.m00 + 1e-5));
         int centerY = static_cast<int>(moment.m01/(moment.m00 + 1e-5));
         centers.push_back(cv::Point2f(centerX, centerY));
@@ -66,8 +63,6 @@ std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point>> FindMark
 
 
 void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image){
-    std::string encoding = image->encoding;
-    double scaleFactor = 1/256.0;
 
     cv_bridge::CvImagePtr imgPointer;
     cv_bridge::CvImage imgPointerColor;
@@ -76,27 +71,21 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image){
     } catch (cv_bridge::Exception e){
         ROS_ERROR("cv_bridge error: %s", e.what());
     }
-    cv::Mat tmpImage;
 
-    // In case of different encodings we can easily set them up
-    if(encoding.compare(FindMarkers::MONO16) == 0){
-        imgPointer->image.convertTo(tmpImage, CV_8UC1, scaleFactor);
-    } else {
-        imgPointer->image.convertTo(tmpImage, CV_8UC1);
-        ROS_WARN("No encoding compatible");
-    }
+    //Convert image in the correct format for opencv
+    cv::Mat tmpImage = FindMarkers::convertImage(imgPointer->image, image->encoding);
         
-    auto cont_cent = FindMarkers::findCenters(tmpImage);
+    auto cont_cent = FindMarkers::findCenters(tmpImage, image->width);
 
     cv::Mat colorImage = FindMarkers::drawMarkers(tmpImage, std::get<0>(cont_cent), std::get<1>(cont_cent));
     imgPointerColor.header = imgPointer->header;
     imgPointerColor.encoding = sensor_msgs::image_encodings::BGR8;
     imgPointerColor.image = colorImage;
 
-    pub.publish(imgPointerColor.toImageMsg());
+    pub_.publish(imgPointerColor.toImageMsg());
 };
 
-cv::Mat FindMarkers::drawMarkers(cv::Mat image, std::vector<std::vector<cv::Point>> contours, std::vector<cv::Point> centers){
+cv::Mat FindMarkers::drawMarkers(const cv::Mat& image, std::vector<std::vector<cv::Point>> contours, std::vector<cv::Point> centers){
     cv::Scalar redColor(0, 0, 255);
     cv::Scalar greenColor(0, 255, 0);
     
@@ -113,6 +102,32 @@ cv::Mat FindMarkers::drawMarkers(cv::Mat image, std::vector<std::vector<cv::Poin
 
     return tmpImage;
 };
+
+cv::Mat FindMarkers::convertImage(const cv::Mat& image, const std::string encoding){
+    cv::Mat tmpImage;
+
+    // At the moment theese are the supported ones, need to check if the sensors
+    // can provide other formats
+    if(encoding.compare(sensor_msgs::image_encodings::MONO8) == 0){
+
+    } else if(encoding.compare(sensor_msgs::image_encodings::MONO16) == 0
+            || encoding.compare(sensor_msgs::image_encodings::RGB16) == 0
+            || encoding.compare(sensor_msgs::image_encodings::RGBA16) == 0
+            || encoding.compare(sensor_msgs::image_encodings::BGR16) == 0
+            || encoding.compare(sensor_msgs::image_encodings::BGRA16) == 0){
+        image.convertTo(tmpImage, CV_8UC1, FindMarkers::scale16To8);
+    } else if (encoding.compare(sensor_msgs::image_encodings::RGB8) == 0
+            || encoding.compare(sensor_msgs::image_encodings::RGBA8) == 0
+            || encoding.compare(sensor_msgs::image_encodings::BGR8) == 0
+            || encoding.compare(sensor_msgs::image_encodings::BGRA8) == 0){
+        image.convertTo(tmpImage, CV_8UC1);
+    }else {
+        image.convertTo(tmpImage, CV_8UC1);
+        ROS_WARN("No encoding compatible: converted without a scale factor");
+    }
+    
+    return tmpImage;
+}
 
 // TODO possible improvings: 
 // - mask to detect the mean color value in order to discard the point that
