@@ -6,8 +6,16 @@ void FindMarkers::start(){
     nodeHandle_.getParam("inTopic", params_.inTopic);
     nodeHandle_.getParam("outTopic", params_.outTopic);
     
+    /*
     sub_ = tsp_.subscribe(params_.inTopic, params_.queue, &FindMarkers::listenerCallback, this);
     pub_ = tsp_.advertise(params_.outTopic, 1);
+    */
+
+    pub_ = nodeHandle_.advertise<sensor_msgs::Image>(params_.outTopic, 1);
+    image_sub_.subscribe(nodeHandle_, params_.inTopic, params_.queue);
+    info_sub_.subscribe(nodeHandle_, params_.infoTopic, params_.queue);
+    sync_.reset(new Sync(MySyncPolicy(10), image_sub_,  info_sub_));
+    sync_->registerCallback(boost::bind(&FindMarkers::listenerCallback, this, _1, _2));
 };
 
 
@@ -62,7 +70,7 @@ std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point>> FindMark
 };
 
 
-void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image){
+void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, const sensor_msgs::CameraInfoConstPtr& info){
 
     cv_bridge::CvImagePtr imgPointer;
     cv_bridge::CvImage imgPointerColor;

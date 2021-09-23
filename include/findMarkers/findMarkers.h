@@ -8,13 +8,16 @@
 #include "opencv2/core/core.hpp"
 #include <cv_bridge/cv_bridge.h>
 #include "image_transport/image_transport.h"
+#include <message_filters/subscriber.h>
+#include <message_filters/time_synchronizer.h>
+#include <message_filters/sync_policies/approximate_time.h>
 
 
 class FindMarkers{
 public:
     //TODO move to private. Check for variable in sensor_msgs
 
-    FindMarkers(): tsp_(nodeHandle_){};
+    FindMarkers()/*: tsp_(nodeHandle_){}*/{};
     ~FindMarkers(){};
 
     void start();
@@ -30,17 +33,29 @@ private:
         int queue{1000};
         std::string outTopic{"image"};
         std::string inTopic{"/k01/ir/image_rect"};
+        std::string infoTopic{"/k01/ir/camera_info"};
     };
 
     Params params_;
     ros::NodeHandle nodeHandle_{"~"};
+
+    /*
     image_transport::Subscriber sub_;
     image_transport::Publisher pub_;
     image_transport::ImageTransport tsp_;
+    */
+
+    //Message filter test
+    ros::Publisher pub_;
+    message_filters::Subscriber<sensor_msgs::Image> image_sub_;
+    message_filters::Subscriber<sensor_msgs::CameraInfo> info_sub_;
+    typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::CameraInfo> MySyncPolicy;
+    typedef message_filters::Synchronizer<MySyncPolicy> Sync;
+    boost::shared_ptr<Sync> sync_;
 
     std::string getImageEncoding();
     std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point>> findCenters(cv::Mat image, double imageWidth);
-    void listenerCallback(const sensor_msgs::ImageConstPtr& Image);
+    void listenerCallback(const sensor_msgs::ImageConstPtr& Image, const sensor_msgs::CameraInfoConstPtr& info);
     cv::Mat drawMarkers(const cv::Mat& image, std::vector<std::vector<cv::Point>> contours, std::vector<cv::Point> centers);
     cv::Mat convertImage(const cv::Mat& image, const std::string encoding);
 };
