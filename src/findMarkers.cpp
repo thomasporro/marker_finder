@@ -15,10 +15,10 @@ std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point>> FindMark
     cv::Mat gray = image.clone();
 
     cv::GaussianBlur(gray, gray, cv::Size(5, 5), 0, 0, cv::BORDER_DEFAULT);
-    cv::threshold(gray, gray, 250, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
+    cv::threshold(gray, gray, 150, 255, cv::THRESH_BINARY);
 
     // Matrix used to dilate the image
-    cv::Mat element = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(15, 15));
+    cv::Mat element = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(11, 11));
     cv::dilate(gray, gray, element); 
 
     std::vector<std::vector<cv::Point>> allContours;
@@ -38,12 +38,12 @@ std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point>> FindMark
         double diameter = perimeter / M_PI;
         // Skips the perimeters that are too small and if is present a too
         // large perimetes it skips the entire frame
-
+    
         if(diameter < FindMarkers::minDiameterRatio * imageWidth)
             continue;
         else if(diameter > FindMarkers::maxDiameterRatio * imageWidth)
-            return std::make_tuple(std::vector<std::vector<cv::Point>>(), std::vector<cv::Point>());
-        
+            continue;
+
         double circularity = 4 * M_PI * (area / (perimeter * perimeter));
         if(circularity > FindMarkers::minCircularity && circularity < maxCircularity){
             contours.push_back(contour);
@@ -114,7 +114,8 @@ cv::Mat FindMarkers::convertImage(const cv::Mat& image, const std::string encodi
             || encoding.compare(sensor_msgs::image_encodings::RGB16) == 0
             || encoding.compare(sensor_msgs::image_encodings::RGBA16) == 0
             || encoding.compare(sensor_msgs::image_encodings::BGR16) == 0
-            || encoding.compare(sensor_msgs::image_encodings::BGRA16) == 0){
+            || encoding.compare(sensor_msgs::image_encodings::BGRA16) == 0
+            || encoding.compare(sensor_msgs::image_encodings::TYPE_16UC1) == 0){
         image.convertTo(tmpImage, CV_8UC1, FindMarkers::scale16To8);
     } else if (encoding.compare(sensor_msgs::image_encodings::RGB8) == 0
             || encoding.compare(sensor_msgs::image_encodings::RGBA8) == 0
