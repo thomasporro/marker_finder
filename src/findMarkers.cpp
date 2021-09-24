@@ -5,7 +5,8 @@ void FindMarkers::start(){
     nodeHandle_.getParam("queue", params_.queue);
     nodeHandle_.getParam("inTopic", params_.inTopic);
     nodeHandle_.getParam("outTopic", params_.outTopic);
-    
+    nodeHandle_.getParam("infoTopic", params_.infoTopic);
+    std::cout << params_.infoTopic;
     /*
     sub_ = tsp_.subscribe(params_.inTopic, params_.queue, &FindMarkers::listenerCallback, this);
     pub_ = tsp_.advertise(params_.outTopic, 1);
@@ -63,7 +64,7 @@ std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point>> FindMark
     for(const auto& moment: momentsContours){
         int centerX = static_cast<int>(moment.m10/(moment.m00 + 1e-5));
         int centerY = static_cast<int>(moment.m01/(moment.m00 + 1e-5));
-        centers.push_back(cv::Point2f(centerX, centerY));
+        centers.push_back(cv::Point2d(centerX, centerY));
     }
 
     return std::make_tuple(contours, centers);
@@ -84,6 +85,17 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
     cv::Mat tmpImage = FindMarkers::convertImage(imgPointer->image, image->encoding);
         
     auto cont_cent = FindMarkers::findCenters(tmpImage, image->width);
+
+    
+    cv::Mat rvec, tvec;
+    if(/*std::get<1>(cont_cent).size()>=4*/false){
+        //Variables for solvePnp
+        std::vector<cv::Point3d> objectPoints{cv::Point3d(0, 0.25, 0.0), cv::Point3d(0.2, 0.25, 0.0), cv::Point3d(0.3, 0.25, 0.0),
+                                        cv::Point3d(0.2, 0.125, 0.0), cv::Point3d(0.2, 0.0, 0.0)};
+        std::vector<double> k(std::begin(info->K), std::end(info->K));
+        std::vector<double> d(std::begin(info->D), std::end(info->D));
+        cv::solvePnP(objectPoints, std::get<1>(cont_cent), k, d, rvec, tvec, false, cv::SOLVEPNP_IPPE);
+    }
 
     cv::Mat colorImage = FindMarkers::drawMarkers(tmpImage, std::get<0>(cont_cent), std::get<1>(cont_cent));
     imgPointerColor.header = imgPointer->header;

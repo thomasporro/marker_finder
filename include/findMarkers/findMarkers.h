@@ -6,6 +6,7 @@
 #include "opencv2/imgcodecs.hpp"
 #include "opencv2/highgui.hpp"
 #include "opencv2/core/core.hpp"
+#include "opencv2/calib3d.hpp"
 #include <cv_bridge/cv_bridge.h>
 #include "image_transport/image_transport.h"
 #include <message_filters/subscriber.h>
