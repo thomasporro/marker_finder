@@ -21,6 +21,6 @@
     </node>
 </group>
 
-<!--node pkg="rqt_image_view" type="rqt_image_view" name="image_view"/-->
+<node pkg="rqt_image_view" type="rqt_image_view" name="image_view"/>
 
 </launch>

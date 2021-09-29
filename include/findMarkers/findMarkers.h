@@ -16,7 +16,6 @@
 
 class FindMarkers{
 public:
-    //TODO move to private. Check for variable in sensor_msgs
 
     FindMarkers()/*: tsp_(nodeHandle_){}*/{};
     ~FindMarkers(){};

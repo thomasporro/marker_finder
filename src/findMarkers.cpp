@@ -6,7 +6,6 @@ void FindMarkers::start(){
     nodeHandle_.getParam("inTopic", params_.inTopic);
     nodeHandle_.getParam("outTopic", params_.outTopic);
     nodeHandle_.getParam("infoTopic", params_.infoTopic);
-    std::cout << params_.infoTopic;
     /*
     sub_ = tsp_.subscribe(params_.inTopic, params_.queue, &FindMarkers::listenerCallback, this);
     pub_ = tsp_.advertise(params_.outTopic, 1);
@@ -18,7 +17,6 @@ void FindMarkers::start(){
     sync_.reset(new Sync(MySyncPolicy(10), image_sub_,  info_sub_));
     sync_->registerCallback(boost::bind(&FindMarkers::listenerCallback, this, _1, _2));
 };
-
 
 std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point>> FindMarkers::findCenters(cv::Mat image, double imageWidth){
     cv::Mat gray = image.clone();
@@ -70,7 +68,6 @@ std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point>> FindMark
     return std::make_tuple(contours, centers);
 };
 
-
 void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, const sensor_msgs::CameraInfoConstPtr& info){
 
     cv_bridge::CvImagePtr imgPointer;
@@ -88,13 +85,25 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
 
     
     cv::Mat rvec, tvec;
-    if(/*std::get<1>(cont_cent).size()>=4*/false){
+    if(std::get<1>(cont_cent).size()==5){
         //Variables for solvePnp
         std::vector<cv::Point3d> objectPoints{cv::Point3d(0, 0.25, 0.0), cv::Point3d(0.2, 0.25, 0.0), cv::Point3d(0.3, 0.25, 0.0),
                                         cv::Point3d(0.2, 0.125, 0.0), cv::Point3d(0.2, 0.0, 0.0)};
-        std::vector<double> k(std::begin(info->K), std::end(info->K));
-        std::vector<double> d(std::begin(info->D), std::end(info->D));
-        cv::solvePnP(objectPoints, std::get<1>(cont_cent), k, d, rvec, tvec, false, cv::SOLVEPNP_IPPE);
+
+        // Conversion needed beacause solvePnP accept std::vector<cv::Point2d> and
+        // passing directly the vector don't work
+        std::vector<cv::Point2d> imagePoints;
+        for(int i = 0; i<std::get<1>(cont_cent).size(); i++){
+            imagePoints.push_back(std::get<1>(cont_cent)[i]);
+        }
+
+        // Brute force for creating matrix (search for a new method)
+        cv::Mat cameraMatrix(3, 3, CV_64FC1);
+        for(int i = 0; i<info->K.size(); i++){
+            cameraMatrix.at<double>(i/3,i%3) = info->K[i];
+        }
+        
+        cv::solvePnP(objectPoints, imagePoints, cameraMatrix, info->D, rvec, tvec, false, cv::SOLVEPNP_IPPE);        
     }
 
     cv::Mat colorImage = FindMarkers::drawMarkers(tmpImage, std::get<0>(cont_cent), std::get<1>(cont_cent));
