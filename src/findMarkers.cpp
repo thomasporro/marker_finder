@@ -83,15 +83,15 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
     cv::Mat rvec, tvec;
     if(std::get<1>(cont_cent).size()==5){
         //Variables for solvePnp
-        std::vector<cv::Point3d> objectPoints{cv::Point3d(0, 0.25, 0.0), cv::Point3d(0.2, 0.25, 0.0), cv::Point3d(0.3, 0.25, 0.0),
-                                        cv::Point3d(0.2, 0.125, 0.0), cv::Point3d(0.2, 0.0, 0.0)};
+        std::vector<cv::Point3d> objectPoints{cv::Point3d(0, 0.0, 0.0), cv::Point3d(0.2, 0.0, 0.0), cv::Point3d(0.3, 0.0, 0.0),
+                                        cv::Point3d(0.2, 0.125, 0.0), cv::Point3d(0.2, 0.25, 0.0)};
 
         // Conversion needed beacause solvePnP accept std::vector<cv::Point2d> and
         // passing directly the vector don't work
         std::vector<cv::Point2d> imagePoints;
         for(int i = 0; i<std::get<1>(cont_cent).size(); i++){
             imagePoints.push_back(std::get<1>(cont_cent)[i]);
-        }
+        } 
 
         // Brute force for creating matrix (search for a new method)
         cv::Mat cameraMatrix(3, 3, CV_64FC1);
@@ -99,7 +99,15 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
             cameraMatrix.at<double>(i/3,i%3) = info->K[i];
         }
         
-        cv::solvePnP(objectPoints, imagePoints, cameraMatrix, info->D, rvec, tvec, false, cv::SOLVEPNP_IPPE);        
+        cv::solvePnP(objectPoints, imagePoints, cameraMatrix, info->D, rvec, tvec, false, cv::SOLVEPNP_IPPE);
+        
+        cv::Mat rotatedMatrix, translateMatrix;
+        cv::Rodrigues(rvec, rotatedMatrix);
+        cv::Rodrigues(tvec, translateMatrix);
+        for(int i=0; i<rotatedMatrix.rows; i++){
+            printf("%f  %f  %f\n", rotatedMatrix.at<double>(i, 0), rotatedMatrix.at<double>(i, 1), rotatedMatrix.at<double>(i, 2));
+        } 
+        
     }
 
     cv::Mat colorImage = FindMarkers::drawMarkers(tmpImage, std::get<0>(cont_cent), std::get<1>(cont_cent));
