@@ -6,10 +6,6 @@ void FindMarkers::start(){
     nodeHandle_.getParam("inTopic", params_.inTopic);
     nodeHandle_.getParam("outTopic", params_.outTopic);
     nodeHandle_.getParam("infoTopic", params_.infoTopic);
-    /*
-    sub_ = tsp_.subscribe(params_.inTopic, params_.queue, &FindMarkers::listenerCallback, this);
-    pub_ = tsp_.advertise(params_.outTopic, 1);
-    */
 
     pub_ = nodeHandle_.advertise<sensor_msgs::Image>(params_.outTopic, 1);
     image_sub_.subscribe(nodeHandle_, params_.inTopic, params_.queue);

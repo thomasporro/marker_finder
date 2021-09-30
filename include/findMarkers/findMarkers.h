@@ -39,13 +39,6 @@ private:
     Params params_;
     ros::NodeHandle nodeHandle_{"~"};
 
-    /*
-    image_transport::Subscriber sub_;
-    image_transport::Publisher pub_;
-    image_transport::ImageTransport tsp_;
-    */
-
-    //Message filter test
     ros::Publisher pub_;
     message_filters::Subscriber<sensor_msgs::Image> image_sub_;
     message_filters::Subscriber<sensor_msgs::CameraInfo> info_sub_;
