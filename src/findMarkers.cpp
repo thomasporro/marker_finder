@@ -14,11 +14,11 @@ void FindMarkers::start(){
     sync_->registerCallback(boost::bind(&FindMarkers::listenerCallback, this, _1, _2));
 };
 
-std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point>> FindMarkers::findCenters(cv::Mat image, double imageWidth){
+std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point2f>> FindMarkers::findCenters(cv::Mat image, double imageWidth){
     cv::Mat gray = image.clone();
 
     cv::GaussianBlur(gray, gray, cv::Size(5, 5), 0, 0, cv::BORDER_DEFAULT);
-    cv::threshold(gray, gray, 150, 255, cv::THRESH_BINARY);
+    cv::threshold(gray, gray, 130, 255, cv::THRESH_BINARY);
 
     // Matrix used to dilate the image
     cv::Mat element = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(11, 11));
@@ -29,7 +29,7 @@ std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point>> FindMark
     cv::findContours(gray, allContours, hier, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
 
     std::vector<std::vector<cv::Point>> contours;
-    std::vector<cv::Point> centers;
+    std::vector<cv::Point2f> centers;
     std::vector<cv::Moments> momentsContours;
 
     // Checks for the length of the contour's perimeter and fot its area,
@@ -58,7 +58,7 @@ std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point>> FindMark
     for(const auto& moment: momentsContours){
         int centerX = static_cast<int>(moment.m10/(moment.m00 + 1e-5));
         int centerY = static_cast<int>(moment.m01/(moment.m00 + 1e-5));
-        centers.push_back(cv::Point2d(centerX, centerY));
+        centers.push_back(cv::Point2f(centerX, centerY));
     }
 
     return std::make_tuple(contours, centers);
@@ -79,38 +79,51 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
         
     auto cont_cent = FindMarkers::findCenters(tmpImage, image->width);
 
-    
+    std::vector<cv::Point2f> projectedPoints;
     cv::Mat rvec, tvec;
     if(std::get<1>(cont_cent).size()==5){
         //Variables for solvePnp
-        std::vector<cv::Point3d> objectPoints{cv::Point3d(0, 0.0, 0.0), cv::Point3d(0.2, 0.0, 0.0), cv::Point3d(0.3, 0.0, 0.0),
-                                        cv::Point3d(0.2, 0.125, 0.0), cv::Point3d(0.2, 0.25, 0.0)};
+        std::vector<cv::Point3f> objectPoints{cv::Point3f(0.25, 0.2, 0.0), cv::Point3f(0.125, 0.2,  0.0), 
+                    cv::Point3f(0.0, 0.0, 0.0), cv::Point3f(0.0, 0.2, 0.0), cv::Point3f(0.0, 0.3, 0.0)};
 
         // Conversion needed beacause solvePnP accept std::vector<cv::Point2d> and
         // passing directly the vector don't work
-        std::vector<cv::Point2d> imagePoints;
+        std::vector<cv::Point2f> imagePoints;
         for(int i = 0; i<std::get<1>(cont_cent).size(); i++){
-            imagePoints.push_back(std::get<1>(cont_cent)[i]);
-        } 
+            imagePoints.push_back(std::get<1>(cont_cent).at(i));
+        }
 
         // Brute force for creating matrix (search for a new method)
         cv::Mat cameraMatrix(3, 3, CV_64FC1);
         for(int i = 0; i<info->K.size(); i++){
-            cameraMatrix.at<double>(i/3,i%3) = info->K[i];
+            cameraMatrix.at<double>(i/3, i%3) = info->K.at(i);
         }
         
-        cv::solvePnP(objectPoints, imagePoints, cameraMatrix, info->D, rvec, tvec, false, cv::SOLVEPNP_IPPE);
+        cv::solvePnP(objectPoints, imagePoints, cameraMatrix, info->D, rvec, tvec, false, cv::SOLVEPNP_ITERATIVE);
         
-        cv::Mat rotatedMatrix, translateMatrix;
-        cv::Rodrigues(rvec, rotatedMatrix);
-        cv::Rodrigues(tvec, translateMatrix);
-        for(int i=0; i<rotatedMatrix.rows; i++){
-            printf("%f  %f  %f\n", rotatedMatrix.at<double>(i, 0), rotatedMatrix.at<double>(i, 1), rotatedMatrix.at<double>(i, 2));
-        } 
-        
+        // Converts the rotation matrix into rotation vector
+        cv::Mat rotationMatrix;
+        cv::Rodrigues(rvec, rotationMatrix);
+
+        // Computing the mean error of solvePnP by reprojecting the objects point into
+        // the camera plane
+        cv::projectPoints(objectPoints, rvec, tvec, cameraMatrix, info->D, projectedPoints);
+        double meanError = cv::norm(imagePoints, projectedPoints, cv::NORM_L2);
+        printf("Error on reprojection: %f\n", meanError);
+
+        cv::Mat translateRotation;
+        cv::transpose(rotationMatrix, translateRotation);
+
+        //Finds the camera coordinates by iverting the projection matrix
+        cv::Mat wrlCoordinates = (-translateRotation) * tvec;
     }
 
-    cv::Mat colorImage = FindMarkers::drawMarkers(tmpImage, std::get<0>(cont_cent), std::get<1>(cont_cent));
+    cv::Mat colorImage;
+    if(std::get<1>(cont_cent).size()==5){
+        colorImage = FindMarkers::drawMarkers(tmpImage, std::get<0>(cont_cent), projectedPoints);
+    }
+    else
+        colorImage = FindMarkers::drawMarkers(tmpImage, std::get<0>(cont_cent), std::get<1>(cont_cent));
     imgPointerColor.header = imgPointer->header;
     imgPointerColor.encoding = sensor_msgs::image_encodings::BGR8;
     imgPointerColor.image = colorImage;
@@ -118,17 +131,19 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
     pub_.publish(imgPointerColor.toImageMsg());
 };
 
-cv::Mat FindMarkers::drawMarkers(const cv::Mat& image, std::vector<std::vector<cv::Point>> contours, std::vector<cv::Point> centers){
+cv::Mat FindMarkers::drawMarkers(const cv::Mat& image, std::vector<std::vector<cv::Point>> contours, std::vector<cv::Point2f> centers){
     cv::Scalar redColor(0, 0, 255);
     cv::Scalar greenColor(0, 255, 0);
     
     cv::Mat tmpImage;
     cv::cvtColor(image, tmpImage, cv::COLOR_GRAY2BGR);
 
-    if(centers.size() <= 0 || contours.size()<=0)
-        return tmpImage;
+    //if(centers.size() <= 0 || contours.size()<=0)
+    //    return tmpImage;
     
-    cv::drawContours(tmpImage, contours, -1, greenColor, 2);
+    if(contours.size() != 0)
+        cv::drawContours(tmpImage, contours, -1, greenColor, 2);
+
     for(unsigned i = 0; i < centers.size(); i++){
         cv::circle(tmpImage, centers[i], 3, redColor, cv::FILLED);
     }
