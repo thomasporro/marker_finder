@@ -51,6 +51,7 @@ private:
     void listenerCallback(const sensor_msgs::ImageConstPtr& Image, const sensor_msgs::CameraInfoConstPtr& info);
     cv::Mat drawMarkers(const cv::Mat& image, std::vector<std::vector<cv::Point>> contours, std::vector<cv::Point2f> centers);
     cv::Mat convertImage(const cv::Mat& image, const std::string encoding);
+    std::vector<cv::Point2f> orderPoints(std::vector<cv::Point2f> points);
 };
 
 #endif

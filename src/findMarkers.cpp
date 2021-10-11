@@ -82,18 +82,14 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
     std::vector<cv::Point2f> projectedPoints;
     cv::Mat rvec, tvec;
     if(std::get<1>(cont_cent).size()==5){
-        //Variables for solvePnp
-        std::vector<cv::Point3f> objectPoints{cv::Point3f(0.25, 0.2, 0.0), cv::Point3f(0.125, 0.2,  0.0), 
-                    cv::Point3f(0.0, 0.0, 0.0), cv::Point3f(0.0, 0.2, 0.0), cv::Point3f(0.0, 0.3, 0.0)};
+        std::vector<cv::Point3f> objectPoints{cv::Point3f(0.0, 0.0, 0.0), cv::Point3f(0.2, 0.0, 0.0), 
+                    cv::Point3f(0.3, 0.0, 0.0), cv::Point3f(0.2, 0.125, 0.0), cv::Point3f(0.2, 0.25, 0.0)};
 
-        // Conversion needed beacause solvePnP accept std::vector<cv::Point2d> and
-        // passing directly the vector don't work
-        std::vector<cv::Point2f> imagePoints;
-        for(int i = 0; i<std::get<1>(cont_cent).size(); i++){
-            imagePoints.push_back(std::get<1>(cont_cent).at(i));
-        }
+        // Orders the point to be consistent with the objects points
+        std::vector<cv::Point2f> imagePoints = FindMarkers::orderPoints(std::get<1>(cont_cent));
 
-        // Brute force for creating matrix (search for a new method)
+        // Brute force for creating matrix
+        // TODO search if it is possible to improve
         cv::Mat cameraMatrix(3, 3, CV_64FC1);
         for(int i = 0; i<info->K.size(); i++){
             cameraMatrix.at<double>(i/3, i%3) = info->K.at(i);
@@ -109,7 +105,7 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
         // the camera plane
         cv::projectPoints(objectPoints, rvec, tvec, cameraMatrix, info->D, projectedPoints);
         double meanError = cv::norm(imagePoints, projectedPoints, cv::NORM_L2);
-        printf("Error on reprojection: %f\n", meanError);
+        // printf("Error on reprojection: %f\n", meanError);
 
         cv::Mat translateRotation;
         cv::transpose(rotationMatrix, translateRotation);
@@ -122,8 +118,9 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
     if(std::get<1>(cont_cent).size()==5){
         colorImage = FindMarkers::drawMarkers(tmpImage, std::get<0>(cont_cent), projectedPoints);
     }
-    else
+    else{
         colorImage = FindMarkers::drawMarkers(tmpImage, std::get<0>(cont_cent), std::get<1>(cont_cent));
+    }
     imgPointerColor.header = imgPointer->header;
     imgPointerColor.encoding = sensor_msgs::image_encodings::BGR8;
     imgPointerColor.image = colorImage;
@@ -182,3 +179,174 @@ cv::Mat FindMarkers::convertImage(const cv::Mat& image, const std::string encodi
 // - mask to detect the mean color value in order to discard the point that
 //   are in the dark
 // - check that all the circles found must have a similar size
+
+std::vector<cv::Point2f> FindMarkers::orderPoints(std::vector<cv::Point2f> points){
+
+    // Check for the area of the triangle for 3 points to find
+    // the ones that are on the same line
+    std::vector<std::vector<cv::Point2f>> lines;
+    for(int i = 0; i < points.size() - 2; i++){
+        for(int j = i + 1; j < points.size() - 1; j++){
+            for(int k = j + 1; k < points.size(); k++){
+                cv::Point2f p1 = points[i];
+                cv::Point2f p2 = points[j];
+                cv::Point2f p3 = points[k];
+                double area = 0.5 * (p1.x*(p2.y-p3.y)+p2.x*(p3.y-p1.y)+p3.x*(p1.y-p2.y));
+                if(area < 75 && area > -75){
+                    // printf("area: %f\n", area);
+                    lines.push_back(std::vector<cv::Point2f> {p1, p2, p3});
+                }
+            }
+        }
+    }
+
+    std::vector<cv::Point2f> outputPoints(5);
+    cv::Point2f outPoint = cv::Point2f(-1, -1);
+    std::fill(outputPoints.begin(), outputPoints.end(), outPoint);
+
+    for(int i = 0; i < lines.size(); i++){
+        cv::Point2f p1 = lines[i][0];
+        cv::Point2f p2 = lines[i][1];
+        cv::Point2f p3 = lines[i][2];
+
+        
+        double dist_p1p2= cv::norm(p1-p2);
+        double dist_p1p3= cv::norm(p1-p3);
+        double dist_p2p3= cv::norm(p2-p3);
+
+        // All combination of possible division in order to find 
+        // the one correct
+        double p2p1p3 = dist_p1p2/dist_p1p3;
+        double p1p2p3 = dist_p1p2/dist_p2p3;
+        double p1p3p2 = dist_p1p3/dist_p2p3;
+        double p3p1p2 = dist_p1p3/dist_p1p2;
+        double p3p2p1 = dist_p2p3/dist_p1p2;
+        double p2p3p1 = dist_p2p3/dist_p1p3;
+
+
+        // Search for the horizontal part of the wand
+        if(p2p1p3 > 0.60 && p2p1p3 < 0.76){
+            outputPoints[0] = p1;
+            outputPoints[2] = p3;
+            // A point is already there
+            if(outputPoints[1].x != -1.0){
+                // If the point is not equal to p2, inverts out[4] and out[1]
+                if(!(outputPoints[1].x == p2.x && outputPoints[1].y == p2.y)){
+                    outputPoints[4] = outputPoints[1];
+                    outputPoints[1] = p2;
+                }
+            } else {
+                outputPoints[1] = p2;
+            }
+        } else if(p1p2p3 > 0.60 && p1p2p3 < 0.76){
+            outputPoints[0] = p2;
+            outputPoints[2] = p3;
+            // A point is already there
+            if(outputPoints[1].x != -1.0){
+                // If the point is not equal to p1, inverts out[4] and out[1]
+                if(!(outputPoints[1].x == p1.x && outputPoints[1].y == p1.y)){
+                    outputPoints[4] = outputPoints[1];
+                    outputPoints[1] = p1;
+                }
+            } else {
+                outputPoints[1] = p1;
+            }
+        } else if(p1p3p2 > 0.60 && p1p3p2 < 0.76){
+            outputPoints[0] = p3;
+            outputPoints[2] = p2;
+            // A point is already there
+            if(outputPoints[1].x != -1.0){
+                // If the point is not equal to p1, inverts out[4] and out[1]
+                if(!(outputPoints[1].x == p1.x && outputPoints[1].y == p1.y)){
+                    outputPoints[4] = outputPoints[1];
+                    outputPoints[1] = p1;
+                }
+            } else {
+                outputPoints[1] = p1;
+            }
+        } else if(p3p1p2 > 0.60 && p3p1p2 < 0.76){
+            outputPoints[0] = p1;
+            outputPoints[2] = p2;
+            // A point is already there
+            if(outputPoints[1].x != -1.0){
+                // If the point is not equal to p3, inverts out[4] and out[1]
+                if(!(outputPoints[1].x == p3.x && outputPoints[1].y == p3.y)){
+                    outputPoints[4] = outputPoints[1];
+                    outputPoints[1] = p3;
+                }
+            } else {
+                outputPoints[1] = p3;
+            }
+        }else if(p3p2p1 > 0.60 && p3p2p1 < 0.76){
+            outputPoints[0] = p2;
+            outputPoints[2] = p1;
+            // A point is already there
+            if(outputPoints[1].x != -1.0){
+                // If the point is not equal to p3, inverts out[4] and out[1]
+                if(!(outputPoints[1].x == p3.x && outputPoints[1].y == p3.y)){
+                    outputPoints[4] = outputPoints[1];
+                    outputPoints[1] = p3;
+                }
+            } else {
+                outputPoints[1] = p3;
+            }
+        } else if(p2p3p1 > 0.60 && p2p3p1 < 0.76){
+            outputPoints[0] = p3;
+            outputPoints[2] = p1;
+            // A point is already there
+            if(outputPoints[1].x != -1.0){
+                // If the point is not equal to p2, inverts out[4] and out[1]
+                if(!(outputPoints[1].x == p2.x && outputPoints[1].y == p2.y)){
+                    outputPoints[4] = outputPoints[1];
+                    outputPoints[1] = p2;
+                }
+            } else {
+                outputPoints[1] = p2;
+            }
+        }
+
+        // Search the vertical part of the wand
+        if(p2p1p3 > 0.90 && p2p1p3 < 1.10){
+            outputPoints[3] = p1;
+            // A point is already there
+            if(outputPoints[1].x != -1.0){
+                if(outputPoints[1].x == p2.x && outputPoints[1].y == p2.y){
+                    outputPoints[4] = p3;
+                } else {
+                    outputPoints[4] = p2;
+                }
+            } else {
+                outputPoints[1] = p2;
+                outputPoints[4] = p3;
+            }
+        } else if(p1p2p3 > 0.90 && p1p2p3 < 1.10){
+            outputPoints[3] = p2;
+            // A point is already there
+            if(outputPoints[1].x != -1.0){
+                if(outputPoints[1].x == p1.x && outputPoints[1].y == p1.y){
+                    outputPoints[4] = p3;
+                } else {
+                    outputPoints[4] = p1;
+                }
+            } else {
+                outputPoints[1] = p1;
+                outputPoints[4] = p3;
+            }
+        } else if(p1p3p2 > 0.90 && p1p3p2 < 1.10){
+            outputPoints[3] = p3;
+            // A point is already there
+            if(outputPoints[1].x != -1.0){
+                if(outputPoints[1].x == p1.x && outputPoints[1].y == p1.y){
+                    outputPoints[4] = p2;
+                } else {
+                    outputPoints[4] = p1;
+                }
+            } else {
+                outputPoints[1] = p1;
+                outputPoints[4] = p2;
+            }
+        }
+    }
+
+    return outputPoints;
+}
