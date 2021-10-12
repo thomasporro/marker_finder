@@ -48,7 +48,7 @@ std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point2f>> FindMa
             continue;
 
         double circularity = 4 * M_PI * (area / (perimeter * perimeter));
-        if(circularity > FindMarkers::minCircularity && circularity < maxCircularity){
+        if(circularity > minCircularity && circularity < maxCircularity){
             contours.push_back(contour);
             momentsContours.push_back(cv::moments(contour));
         }
@@ -115,7 +115,7 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
     }
 
     cv::Mat colorImage;
-    if(std::get<1>(cont_cent).size()==5){
+    if(false && std::get<1>(cont_cent).size()==5){
         colorImage = FindMarkers::drawMarkers(tmpImage, std::get<0>(cont_cent), projectedPoints);
     }
     else{
@@ -134,9 +134,6 @@ cv::Mat FindMarkers::drawMarkers(const cv::Mat& image, std::vector<std::vector<c
     
     cv::Mat tmpImage;
     cv::cvtColor(image, tmpImage, cv::COLOR_GRAY2BGR);
-
-    //if(centers.size() <= 0 || contours.size()<=0)
-    //    return tmpImage;
     
     if(contours.size() != 0)
         cv::drawContours(tmpImage, contours, -1, greenColor, 2);
@@ -223,7 +220,6 @@ std::vector<cv::Point2f> FindMarkers::orderPoints(std::vector<cv::Point2f> point
         double p3p2p1 = dist_p2p3/dist_p1p2;
         double p2p3p1 = dist_p2p3/dist_p1p3;
 
-
         // Search for the horizontal part of the wand
         if(p2p1p3 > 0.60 && p2p1p3 < 0.76){
             outputPoints[0] = p1;
@@ -306,7 +302,7 @@ std::vector<cv::Point2f> FindMarkers::orderPoints(std::vector<cv::Point2f> point
         }
 
         // Search the vertical part of the wand
-        if(p2p1p3 > 0.90 && p2p1p3 < 1.10){
+        if(p2p1p3 > 0.90 && p2p1p3 < 1.20){
             outputPoints[3] = p1;
             // A point is already there
             if(outputPoints[1].x != -1.0){
@@ -319,7 +315,7 @@ std::vector<cv::Point2f> FindMarkers::orderPoints(std::vector<cv::Point2f> point
                 outputPoints[1] = p2;
                 outputPoints[4] = p3;
             }
-        } else if(p1p2p3 > 0.90 && p1p2p3 < 1.10){
+        } else if(p1p2p3 > 0.90 && p1p2p3 < 1.20){
             outputPoints[3] = p2;
             // A point is already there
             if(outputPoints[1].x != -1.0){
@@ -332,7 +328,7 @@ std::vector<cv::Point2f> FindMarkers::orderPoints(std::vector<cv::Point2f> point
                 outputPoints[1] = p1;
                 outputPoints[4] = p3;
             }
-        } else if(p1p3p2 > 0.90 && p1p3p2 < 1.10){
+        } else if(p1p3p2 > 0.90 && p1p3p2 < 1.20){
             outputPoints[3] = p3;
             // A point is already there
             if(outputPoints[1].x != -1.0){
@@ -347,6 +343,5 @@ std::vector<cv::Point2f> FindMarkers::orderPoints(std::vector<cv::Point2f> point
             }
         }
     }
-
     return outputPoints;
 }
