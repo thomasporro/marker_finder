@@ -17,6 +17,10 @@ void FindMarkers::start(){
     info_sub2_.subscribe(nodeHandle_, "/k05/ir/camera_info", params_.queue);
 
     kinect1_ = tsp_.subscribeCamera("/k01/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
+    kinect2_ = tsp_.subscribeCamera("/k02/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
+    kinect3_ = tsp_.subscribeCamera("/k03/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
+    kinect4_ = tsp_.subscribeCamera("/k04/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
+    kinect5_ = tsp_.subscribeCamera("/k05/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
 
     pub_ = nodeHandle_.advertise<sensor_msgs::Image>(params_.outTopic, 1);
     // image_sub_.subscribe(nodeHandle_, params_.inTopic, params_.queue);
@@ -26,7 +30,11 @@ void FindMarkers::start(){
 
     // Transform publisher
     // TODO remove hardocoding
-    transformPub_ = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform", 1000);
+    transformPub_[0] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform1", 1000);
+    transformPub_[1] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform2", 1000);
+    transformPub_[2] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform3", 1000);
+    transformPub_[3] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform4", 1000);
+    transformPub_[4] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform5", 1000);
 };
 
 std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point2d>> FindMarkers::findCenters(cv::Mat image, double imageWidth){
@@ -178,7 +186,7 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
 
        
     }
-     FindMarkers::publishTransform(rvec, tvec, info->header);
+    FindMarkers::publishTransform(rvec, tvec, info->header);
 
     cv::Mat colorImage;    
     if(std::get<1>(cont_cent).size()==5){
@@ -211,7 +219,7 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
     imgPointerColor.encoding = sensor_msgs::image_encodings::BGR8;
     imgPointerColor.image = colorImage;
 
-    pub_.publish(imgPointerColor.toImageMsg());
+    // pub_.publish(imgPointerColor.toImageMsg());
     
 };
 
@@ -261,7 +269,7 @@ cv::Mat FindMarkers::convertImage(const cv::Mat& image, const std::string encodi
 
 // TODO possible improvings: 
 // - mask to detect the mean color value in order to discard the point that
-//   are in the dark
+//   are in the dark (is it correct? i don't think so)
 // - check that all the circles found must have a similar size
 
 std::vector<cv::Point2d> FindMarkers::orderPoints(std::vector<cv::Point2d> points){
@@ -447,29 +455,49 @@ void FindMarkers::publishTransform(cv::Mat rvec, cv::Mat tvec, std_msgs::Header 
         transformStamped.transform.translation.x = 0.0;
         transformStamped.transform.translation.y = 0.0;
         transformStamped.transform.translation.z = 0.0;
-        transformPub_.sendTransform(transformStamped);
+    } else {
+        tf2::Vector3 translation(tvec.at<double>(0), tvec.at<double>(1), tvec.at<double>(2));
 
+        cv::Mat rotationMatrix;
+        cv::Rodrigues(rvec, rotationMatrix);
+        tf2::Matrix3x3 tfMatrix(rotationMatrix.at<double>(0, 0), rotationMatrix.at<double>(0, 1), rotationMatrix.at<double>(0, 2),
+                                rotationMatrix.at<double>(1, 0), rotationMatrix.at<double>(1, 1), rotationMatrix.at<double>(1, 2),
+                                rotationMatrix.at<double>(2, 0), rotationMatrix.at<double>(2, 1), rotationMatrix.at<double>(2, 2));
+        tf2::Quaternion rotation;
+        tfMatrix.getRotation(rotation);
+
+        // Setting the message to be sent
+        transformStamped.transform.rotation.x = rotation.x();
+        transformStamped.transform.rotation.y = rotation.y();
+        transformStamped.transform.rotation.z = rotation.z();
+        transformStamped.transform.rotation.w = rotation.w();
+        transformStamped.transform.translation.x = translation[0];
+        transformStamped.transform.translation.y = translation[1];
+        transformStamped.transform.translation.z = translation[2];
     }
-    tf2::Vector3 translation(tvec.at<double>(0), tvec.at<double>(1), tvec.at<double>(2));
 
-    cv::Mat rotationMatrix;
-    cv::Rodrigues(rvec, rotationMatrix);
-    tf2::Matrix3x3 tfMatrix(rotationMatrix.at<double>(0, 0), rotationMatrix.at<double>(0, 1), rotationMatrix.at<double>(0, 2),
-                            rotationMatrix.at<double>(1, 0), rotationMatrix.at<double>(1, 1), rotationMatrix.at<double>(1, 2),
-                            rotationMatrix.at<double>(2, 0), rotationMatrix.at<double>(2, 1), rotationMatrix.at<double>(2, 2));
-    tf2::Quaternion rotation;
-    tfMatrix.getRotation(rotation);
-    // printf("%f %f %f %f\n", rotation[0], rotation[1], rotation[2], rotation[3]);
+    // Find on which topic to publish
+    int kinect = FindMarkers::findInteger(header.frame_id);
 
-    // Setting the message to be sent
-    // geometry_msgs::TransformStamped transformStamped;
-    // transformStamped.header = header;
-    // transformStamped.child_frame_id = header.frame_id;
-    transformStamped.transform.rotation.x = rotation.x();
-    transformStamped.transform.rotation.y = rotation.y();
-    transformStamped.transform.rotation.z = rotation.z();
-    transformStamped.transform.rotation.w = rotation.w();
-    transformStamped.transform.translation.x = translation[0];
-    transformStamped.transform.translation.y = translation[1];
-    transformStamped.transform.translation.z = translation[2];
+    transformPub_[kinect-1].publish(transformStamped);
+}
+
+
+double FindMarkers::findInteger(std::string str){
+    // Finds the first and last position where a digit appears
+    size_t i = 0;
+    for(; i < str.length(); i++){
+        if(isdigit(str[i]))
+            break;
+    }
+    size_t start, end;
+    start = i;
+    for(; i < str.length(); i++){
+        if(!isdigit(str[i]))
+            break;
+    }
+    end=i;
+
+    int integer = atoi( str.substr(start, end-1).c_str());
+    return integer;
 }

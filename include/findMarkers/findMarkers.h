@@ -45,7 +45,7 @@ private:
     ros::NodeHandle nodeHandle_{"~"};
 
     image_transport::ImageTransport tsp_;
-    image_transport::CameraSubscriber kinect1_;
+    image_transport::CameraSubscriber kinect1_, kinect2_, kinect3_, kinect4_, kinect5_;
 
     ros::Publisher pub_;
     message_filters::Subscriber<sensor_msgs::Image> image_sub_;
@@ -56,7 +56,7 @@ private:
     boost::shared_ptr<Sync> sync_;
 
     // Publisher for the relative position of the camera respect to the wan
-    ros::Publisher transformPub_;
+    ros::Publisher transformPub_[5];
 
     //Test
     message_filters::Subscriber<sensor_msgs::Image> image_sub2_;
@@ -70,6 +70,8 @@ private:
     cv::Mat convertImage(const cv::Mat& image, const std::string encoding);
     std::vector<cv::Point2d> orderPoints(std::vector<cv::Point2d> points);
     void publishTransform(cv::Mat rvec, cv::Mat tvec, std_msgs::Header header);
+
+    double findInteger(std::string str);
 };
 
 #endif
