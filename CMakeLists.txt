@@ -10,6 +10,7 @@ find_package(catkin REQUIRED COMPONENTS
   cv_bridge
   image_transport
   message_filters
+  tf2
 )
 
 find_package(OpenCV REQUIRED)
@@ -27,7 +28,7 @@ find_package(OpenCV REQUIRED)
 catkin_package(
 # INCLUDE_DIRS include
 #  LIBRARIES marker_finder
-  CATKIN_DEPENDS roscpp sensor_msgs cv_bridge message_filters
+  CATKIN_DEPENDS roscpp sensor_msgs cv_bridge message_filters tf2 
 #  DEPENDS system_lib
 )
 

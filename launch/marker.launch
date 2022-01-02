@@ -1,15 +1,15 @@
 <launch>
 
 
-<group ns="rosbag">
-    <node pkg="rosbag" type="play" name="replay" args="--clock -l /home/thomas/Documenti/MasterThesis/movement_bag.bag"/>
-</group>
+<!--group ns="rosbag">
+    <node pkg="rosbag" type="play" name="replay" args="-clock -l /home/thomas/Documenti/MasterThesis/static_bag.bag"/>
+</group-->
 
 
 <group ns="marker_finder">
     <arg name="queue"       default="1000"  />
-    <arg name="inTopic"     default="/kinect2/sd/image_ir_rect" /> <!-- /k01/ir/image_rect  /kinect2/sd/image_ir_rect-->
-    <arg name="infoTopic"   default="/kinect2/sd/camera_info"/> <!--/k01/ir/camera_info  /kinect2/sd/camera_info-->
+    <arg name="inTopic"     default="/k01/ir/image_rect" /> <!-- /k01/ir/image_rect  /kinect2/sd/image_ir_rect-->
+    <arg name="infoTopic"   default="/k01/ir/camera_info"/> <!--/k01/ir/camera_info  /kinect2/sd/camera_info-->
     <arg name="outTopic"    default="image" />
 
     <node pkg="marker_finder" type="node" name="finder" output="screen">

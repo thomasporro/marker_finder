@@ -14,6 +14,11 @@
 #include <message_filters/sync_policies/approximate_time.h>
 
 
+//Test
+#include <tf2_ros/static_transform_broadcaster.h>
+#include <geometry_msgs/TransformStamped.h>
+
+
 class FindMarkers{
 public:
 
@@ -42,16 +47,27 @@ private:
     ros::Publisher pub_;
     message_filters::Subscriber<sensor_msgs::Image> image_sub_;
     message_filters::Subscriber<sensor_msgs::CameraInfo> info_sub_;
-    typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::CameraInfo> MySyncPolicy;
+    typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::CameraInfo, 
+                sensor_msgs::Image, sensor_msgs::CameraInfo> MySyncPolicy;
     typedef message_filters::Synchronizer<MySyncPolicy> Sync;
     boost::shared_ptr<Sync> sync_;
 
+    // Publisher for the relative position of the camera respect to the wan
+    ros::Publisher transformPub_;
+
+    //Test
+    message_filters::Subscriber<sensor_msgs::Image> image_sub2_;
+    message_filters::Subscriber<sensor_msgs::CameraInfo> info_sub2_;
+    static tf2_ros::StaticTransformBroadcaster static_broadcaster_;
+
     std::string getImageEncoding();
-    std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point2f>> findCenters(cv::Mat image, double imageWidth);
-    void listenerCallback(const sensor_msgs::ImageConstPtr& Image, const sensor_msgs::CameraInfoConstPtr& info);
-    cv::Mat drawMarkers(const cv::Mat& image, std::vector<std::vector<cv::Point>> contours, std::vector<cv::Point2f> centers);
+    std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point2d>> findCenters(cv::Mat image, double imageWidth);
+    void listenerCallback(const sensor_msgs::ImageConstPtr& Image, const sensor_msgs::CameraInfoConstPtr& info, 
+                const sensor_msgs::ImageConstPtr& image1, const sensor_msgs::CameraInfoConstPtr& info1);
+    cv::Mat drawMarkers(const cv::Mat& image, std::vector<std::vector<cv::Point>> contours, std::vector<cv::Point2d> centers);
     cv::Mat convertImage(const cv::Mat& image, const std::string encoding);
-    std::vector<cv::Point2f> orderPoints(std::vector<cv::Point2f> points);
+    std::vector<cv::Point2d> orderPoints(std::vector<cv::Point2d> points);
+    void publishTransform(cv::Mat rvec, cv::Mat tvec, std_msgs::Header header, cv::Mat rvec1, cv::Mat tvec1, std_msgs::Header header1);
 };
 
 #endif
