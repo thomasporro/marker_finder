@@ -22,7 +22,7 @@
 class FindMarkers{
 public:
 
-    FindMarkers()/*: tsp_(nodeHandle_){}*/{};
+    FindMarkers(): tsp_(nodeHandle_){};
     ~FindMarkers(){};
 
     void start();
@@ -44,6 +44,9 @@ private:
     Params params_;
     ros::NodeHandle nodeHandle_{"~"};
 
+    image_transport::ImageTransport tsp_;
+    image_transport::CameraSubscriber kinect1_;
+
     ros::Publisher pub_;
     message_filters::Subscriber<sensor_msgs::Image> image_sub_;
     message_filters::Subscriber<sensor_msgs::CameraInfo> info_sub_;
@@ -62,12 +65,11 @@ private:
 
     std::string getImageEncoding();
     std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point2d>> findCenters(cv::Mat image, double imageWidth);
-    void listenerCallback(const sensor_msgs::ImageConstPtr& Image, const sensor_msgs::CameraInfoConstPtr& info, 
-                const sensor_msgs::ImageConstPtr& image1, const sensor_msgs::CameraInfoConstPtr& info1);
+    void listenerCallback(const sensor_msgs::ImageConstPtr& Image, const sensor_msgs::CameraInfoConstPtr& info);
     cv::Mat drawMarkers(const cv::Mat& image, std::vector<std::vector<cv::Point>> contours, std::vector<cv::Point2d> centers);
     cv::Mat convertImage(const cv::Mat& image, const std::string encoding);
     std::vector<cv::Point2d> orderPoints(std::vector<cv::Point2d> points);
-    void publishTransform(cv::Mat rvec, cv::Mat tvec, std_msgs::Header header, cv::Mat rvec1, cv::Mat tvec1, std_msgs::Header header1);
+    void publishTransform(cv::Mat rvec, cv::Mat tvec, std_msgs::Header header);
 };
 
 #endif

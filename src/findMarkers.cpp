@@ -16,11 +16,13 @@ void FindMarkers::start(){
     image_sub2_.subscribe(nodeHandle_, "/k05/ir/image_rect", params_.queue);
     info_sub2_.subscribe(nodeHandle_, "/k05/ir/camera_info", params_.queue);
 
+    kinect1_ = tsp_.subscribeCamera("/k01/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
+
     pub_ = nodeHandle_.advertise<sensor_msgs::Image>(params_.outTopic, 1);
-    image_sub_.subscribe(nodeHandle_, params_.inTopic, params_.queue);
-    info_sub_.subscribe(nodeHandle_, params_.infoTopic, params_.queue);
-    sync_.reset(new Sync(MySyncPolicy(10), image_sub_,  info_sub_, image_sub2_, info_sub2_));
-    sync_->registerCallback(boost::bind(&FindMarkers::listenerCallback, this, _1, _2, _3, _4));
+    // image_sub_.subscribe(nodeHandle_, params_.inTopic, params_.queue);
+    // info_sub_.subscribe(nodeHandle_, params_.infoTopic, params_.queue);
+    // sync_.reset(new Sync(MySyncPolicy(10), image_sub_,  info_sub_));
+    // sync_->registerCallback(boost::bind(&FindMarkers::listenerCallback, this, _1, _2));
 
     // Transform publisher
     // TODO remove hardocoding
@@ -100,47 +102,37 @@ std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point2d>> FindMa
     // return std::make_tuple(contours, centers);
 };
 
-void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, const sensor_msgs::CameraInfoConstPtr& info, 
-                const sensor_msgs::ImageConstPtr& image1, const sensor_msgs::CameraInfoConstPtr& info1){
+void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, const sensor_msgs::CameraInfoConstPtr& info){
 
    
     cv_bridge::CvImagePtr imgPointer;
     cv_bridge::CvImage imgPointerColor;
-    //Test
-    cv_bridge::CvImagePtr imgPointer1;
-    cv_bridge::CvImage imgPointerColor1;
 
     try{
         imgPointer = cv_bridge::toCvCopy(image);
-        imgPointer1 = cv_bridge::toCvCopy(image1);
     } catch (cv_bridge::Exception e){
-        ROS_ERROR("cv_bridge error: %s", e.what());
+        ROS_ERROR("cv_bridge error: %s\n", e.what());
     }
 
-    //printf("image_cols: %d\nimage1_cols: %d\n", imgPointer->image.cols, imgPointer1->image.cols);
-    cv::Mat tmpImage, tmpImage1;
-    std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point2d>> cont_cent, cont_cent1;
+    cv::Mat tmpImage;
+    std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point2d>> cont_cent;
     try{
         //Convert image in the correct format for opencv
         tmpImage = FindMarkers::convertImage(imgPointer->image, image->encoding);
         cont_cent = FindMarkers::findCenters(tmpImage, image->width);
-        //Test
-        tmpImage1 = FindMarkers::convertImage(imgPointer1->image, image1->encoding);
-        cont_cent1 = FindMarkers::findCenters(tmpImage1, image1->width);
     } catch (cv::Exception e) {
-        printf("Error\n");
-        return;
+        ROS_ERROR("Error while finding the centers of the markers: %s\n", e.what());
     }
     
 
-    std::vector<cv::Point3d> planePoints{cv::Point3d(0.0 , 0.0, 0.0), cv::Point3d(0.0, 0.3, 0.0), 
-                         cv::Point3d(0.3, 0.3, 0.0), cv::Point3d(0.3, 0.0, 0.0)};
-    std::vector<cv::Point2d> projectedPlanePoints;
+    // std::vector<cv::Point3d> planePoints{cv::Point3d(0.0 , 0.0, 0.0), cv::Point3d(0.0, 0.3, 0.0), 
+    //                      cv::Point3d(0.3, 0.3, 0.0), cv::Point3d(0.3, 0.0, 0.0)};
+    // std::vector<cv::Point2d> projectedPlanePoints;
 
 
     std::vector<cv::Point2d> projectedPoints;
-    cv::Mat rvec, tvec, rvec1, tvec1;
-    if(std::get<1>(cont_cent).size()==5 && std::get<1>(cont_cent1).size()==5){
+    cv::Mat rvec, tvec;
+    if(std::get<1>(cont_cent).size()==5){
         std::vector<cv::Point3d> objectPoints{cv::Point3d(0.0, 0.0, 0.0), cv::Point3d(0.2, 0.0, 0.0), 
                     cv::Point3d(0.3, 0.0, 0.0), cv::Point3d(0.2, 0.125, 0.0), cv::Point3d(0.2, 0.25, 0.0)};
 
@@ -158,21 +150,7 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
             cameraMatrix.at<double>(i/3, i%3) = info->K.at(i);
         }
 
-
-        //TEST
-        std::vector<cv::Point2d> imagePoints12 = FindMarkers::orderPoints(std::get<1>(cont_cent1));
-        std::vector<cv::Point2d> imagePoints1;
-        for(int i=0; i<imagePoints12.size();i++){
-            imagePoints1.push_back((cv::Point2d)imagePoints12[i]);
-        }
-        cv::Mat cameraMatrix1(3, 3, CV_64FC1);
-        for(int i = 0; i<info1->K.size(); i++){
-            cameraMatrix1.at<double>(i/3, i%3) = info1->K.at(i);
-        }
-        //FINE TEST
-
         cv::solvePnP(objectPoints, imagePoints, cameraMatrix, info->D, rvec, tvec, false, cv::SOLVEPNP_ITERATIVE);
-        cv::solvePnP(objectPoints, imagePoints1, cameraMatrix1, info1->D, rvec1, tvec1, false, cv::SOLVEPNP_ITERATIVE);
         // cv::solvePnPRansac(objectPoints, imagePoints, cameraMatrix, info->D, rvec, tvec, false, 1000, 1.5, 0.99, cv::noArray(), cv::SOLVEPNP_EPNP);
         
         // Converts the rotation matrix into rotation vector
@@ -196,14 +174,16 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
         cv::Mat wrlCoordinates = (-translateRotation) * tvec;
 
         // printf("Coordinates: %f %f %f\n", wrlCoordinates.at<double>(0, 0), 
-        //         wrlCoordinates.at<double>(0, 1), wrlCoordinates.at<double>(0, 2));  
+        //         wrlCoordinates.at<double>(0, 1), wrlCoordinates.at<double>(0, 2));
+
+       
     }
-    
+     FindMarkers::publishTransform(rvec, tvec, info->header);
 
     cv::Mat colorImage;    
-    if(std::get<1>(cont_cent).size()==5 && std::get<1>(cont_cent1).size()==5){
-        colorImage = FindMarkers::drawMarkers(tmpImage, std::get<0>(cont_cent), projectedPoints);
-        //colorImage = FindMarkers::drawMarkers(tmpImage, std::get<0>(cont_cent), std::get<1>(cont_cent));
+    if(std::get<1>(cont_cent).size()==5){
+        // colorImage = FindMarkers::drawMarkers(tmpImage, std::get<0>(cont_cent), projectedPoints);
+        colorImage = FindMarkers::drawMarkers(tmpImage, std::get<0>(cont_cent), std::get<1>(cont_cent));
 
 
         // Draw the bounding box that show us the plane
@@ -218,9 +198,8 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
         // cv::polylines(colorImage, finalPoints, true, blueColor, thickness, cv::FILLED, 0);
 
         //Trying the new method
-        FindMarkers::publishTransform(rvec, tvec, info->header, rvec1, tvec1, info1->header);
         
-        //printf("Trovati\n");
+        
     }
     else{
         colorImage = FindMarkers::drawMarkers(tmpImage, std::get<0>(cont_cent), std::get<1>(cont_cent));
@@ -454,8 +433,23 @@ std::vector<cv::Point2d> FindMarkers::orderPoints(std::vector<cv::Point2d> point
     return outputPoints;
 }
 
-void FindMarkers::publishTransform(cv::Mat rvec, cv::Mat tvec, std_msgs::Header header, 
-                    cv::Mat rvec1, cv::Mat tvec1, std_msgs::Header header1){
+void FindMarkers::publishTransform(cv::Mat rvec, cv::Mat tvec, std_msgs::Header header){
+    // Setting the message to be sent
+    geometry_msgs::TransformStamped transformStamped;
+    transformStamped.header = header;
+    transformStamped.child_frame_id = header.frame_id;
+
+    if(rvec.empty() || tvec.empty()){
+        transformStamped.transform.rotation.x = 0.0;
+        transformStamped.transform.rotation.y = 0.0;
+        transformStamped.transform.rotation.z = 0.0;
+        transformStamped.transform.rotation.w = 0.0;
+        transformStamped.transform.translation.x = 0.0;
+        transformStamped.transform.translation.y = 0.0;
+        transformStamped.transform.translation.z = 0.0;
+        transformPub_.sendTransform(transformStamped);
+
+    }
     tf2::Vector3 translation(tvec.at<double>(0), tvec.at<double>(1), tvec.at<double>(2));
 
     cv::Mat rotationMatrix;
@@ -468,9 +462,9 @@ void FindMarkers::publishTransform(cv::Mat rvec, cv::Mat tvec, std_msgs::Header 
     // printf("%f %f %f %f\n", rotation[0], rotation[1], rotation[2], rotation[3]);
 
     // Setting the message to be sent
-    geometry_msgs::TransformStamped transformStamped;
-    transformStamped.header = header;
-    transformStamped.child_frame_id = header.frame_id;
+    // geometry_msgs::TransformStamped transformStamped;
+    // transformStamped.header = header;
+    // transformStamped.child_frame_id = header.frame_id;
     transformStamped.transform.rotation.x = rotation.x();
     transformStamped.transform.rotation.y = rotation.y();
     transformStamped.transform.rotation.z = rotation.z();
@@ -478,67 +472,4 @@ void FindMarkers::publishTransform(cv::Mat rvec, cv::Mat tvec, std_msgs::Header 
     transformStamped.transform.translation.x = translation[0];
     transformStamped.transform.translation.y = translation[1];
     transformStamped.transform.translation.z = translation[2];
-
-    //Test
-    
-    cv::Mat rotationMatrix1;
-    cv::Rodrigues(rvec1, rotationMatrix1);
-
-    cv::Mat translatedRotation;
-    cv::transpose(rotationMatrix1, translatedRotation);
-    cv::Mat newTvec = (-translatedRotation) * tvec;
-
-    // Manca da fare la moltiplicazione fra le matrici in modo da trovare quella relativa
-
-    cv::Mat mat1(4, 4, CV_64FC1);
-    cv::Mat mat2(4, 4, CV_64FC1);
-
-    //Filling the matrix in order to multiply them
-    for(int i = 0; i < 9; i++){
-        mat1.at<double>(i/3, i%3) = rotationMatrix.at<double>(i/3, i%3);
-        mat2.at<double>(i/3, i%3) = rotationMatrix1.at<double>(i/3, i%3);
-    }
-
-    for(int i = 0; i < 3; i++){
-        mat1.at<double>(i, 3) = tvec.at<double>(i);
-        mat2.at<double>(i, 3) = newTvec.at<double>(i);
-    }
-
-    cv::Mat final = mat2*mat1;
-
-    printf("%f      %f      %f\n", final.at<double>(0, 3), final.at<double>(1, 3), final.at<double>(2, 3));
-
-    tf2::Vector3 translation1(newTvec.at<double>(0), newTvec.at<double>(1), newTvec.at<double>(2));
-
-
-    //Transormation to quaterionio
-    tf2::Matrix3x3 tfMatrix1(rotationMatrix1.at<double>(0, 0), rotationMatrix1.at<double>(0, 1), rotationMatrix1.at<double>(0, 2),
-                            rotationMatrix1.at<double>(1, 0), rotationMatrix1.at<double>(1, 1), rotationMatrix1.at<double>(1, 2),
-                            rotationMatrix1.at<double>(2, 0), rotationMatrix1.at<double>(2, 1), rotationMatrix1.at<double>(2, 2));
-    tf2::Quaternion rotation1;
-    tfMatrix.getRotation(rotation1);
-    // printf("%f %f %f %f\n", rotation[0], rotation[1], rotation[2], rotation[3]);
-
-    // Setting the message to be sent
-    geometry_msgs::TransformStamped transformStamped1;
-    transformStamped1.header = header1;
-    transformStamped1.child_frame_id = header1.frame_id;
-    // transformStamped1.transform.rotation.x = rotation1.x();
-    // transformStamped1.transform.rotation.y = rotation1.y();
-    // transformStamped1.transform.rotation.z = rotation1.z();
-    // transformStamped1.transform.rotation.w = rotation1.w();
-    // transformStamped1.transform.translation.x = translation1[0];
-    // transformStamped1.transform.translation.y = translation1[1];
-    // transformStamped1.transform.translation.z = translation1[2];
-
-    transformStamped1.transform.rotation.x = 0.0;
-    transformStamped1.transform.rotation.y = 0.0;
-    transformStamped1.transform.rotation.z = 0.0;
-    transformStamped1.transform.rotation.w = 0.0;
-    transformStamped1.transform.translation.x = 0.0;
-    transformStamped1.transform.translation.y = 0.0;
-    transformStamped1.transform.translation.z = 0.0;
-    
-    
-    transformPub_.publish(transformStamped1);
 }
