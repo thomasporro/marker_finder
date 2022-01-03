@@ -521,7 +521,61 @@ void FindMarkers::transformCallback(const geometry_msgs::TransformStampedConstPt
 }
 
 cv::Mat FindMarkers::computePosition(geometry_msgs::Transform pos1, geometry_msgs::Transform pos2){
-    cv::Mat test;
-    // printf("inside-> z1: %f\n", pos1.translation.z);
-    return test;
+    cv::Mat output(4, 4, CV_64FC1);
+    output.at<double>(3, 3) = 1.0;
+
+    tf2::Matrix3x3 preliminaryRotation1(tf2::Quaternion(pos1.rotation.x, 
+                pos1.rotation.y, pos1.rotation.z, pos1.rotation.w));
+    tf2::Matrix3x3 preliminaryRotation2(tf2::Quaternion(pos2.rotation.x, 
+                pos2.rotation.y, pos2.rotation.z, pos2.rotation.w));
+    
+    // Initialization of the rotation matrices
+    cv::Mat rotation1(3, 3, CV_64FC1);
+    cv::Mat rotation2(3, 3, CV_64FC1);
+    for(int i = 0; i < 3; i++){
+        rotation1.at<double>(i, 0) = preliminaryRotation1[0].getX();
+        rotation1.at<double>(i, 1) = preliminaryRotation1[0].getY();
+        rotation1.at<double>(i, 2) = preliminaryRotation1[0].getZ();
+
+        rotation2.at<double>(i, 0) = preliminaryRotation2[0].getX();
+        rotation2.at<double>(i, 1) = preliminaryRotation2[0].getY();
+        rotation2.at<double>(i, 2) = preliminaryRotation2[0].getZ();
+    }   
+
+    // Initialization of the translation vectors
+    cv::Mat translation1(3, 1, CV_64FC1);
+    cv::Mat translation2(3, 1, CV_64FC1);
+
+    translation1.at<double>(1, 0) = pos1.translation.x;
+    translation1.at<double>(2, 0) = pos1.translation.y;
+    translation1.at<double>(3, 0) = pos1.translation.z;
+
+    translation2.at<double>(1, 0) = pos2.translation.x;
+    translation2.at<double>(2, 0) = pos2.translation.y;
+    translation2.at<double>(3, 0) = pos2.translation.z;
+    
+    cv::Mat finalRotation(3, 3, CV_64FC1);
+    cv::Mat finalTranslation(3, 3, CV_64FC1);
+
+    // Actual code to compute the tranformation
+    finalRotation = rotation2.t() * rotation1;
+    finalTranslation = rotation2.t() * (translation1 - translation2);
+
+    // Filling the output matrix (Not Working)
+    cv::Rect rect_rot(0, 0, finalRotation.rows, finalRotation.cols);
+    cv::Rect rect_transl(0, 3, finalTranslation.rows, finalTranslation.cols);
+    cv::Mat output_R = output(rect_rot);
+    cv::Mat output_T = output(rect_transl);
+    output_R = finalRotation;
+    output_T = finalTranslation;
+    
+    printf("inside\n");
+
+    for(int i = 0; i < 4; i++){
+        printf("%f          %f          %f   \n", 
+            finalRotation.at<double>(i, 0), finalRotation.at<double>(i, 1), 
+            finalRotation.at<double>(i, 2));
+    }
+    printf("\n");
+    return output;
 }
