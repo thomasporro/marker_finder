@@ -12,15 +12,28 @@ void FindMarkers::start(){
     nodeHandle_.getParam("outTopic", params_.outTopic);
     nodeHandle_.getParam("infoTopic", params_.infoTopic);
 
-    //Test
-    image_sub2_.subscribe(nodeHandle_, "/k05/ir/image_rect", params_.queue);
-    info_sub2_.subscribe(nodeHandle_, "/k05/ir/camera_info", params_.queue);
-
     kinect1_ = tsp_.subscribeCamera("/k01/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
     kinect2_ = tsp_.subscribeCamera("/k02/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
     kinect3_ = tsp_.subscribeCamera("/k03/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
     kinect4_ = tsp_.subscribeCamera("/k04/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
     kinect5_ = tsp_.subscribeCamera("/k05/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
+
+    transformPub_[0] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform1", 1000);
+    transformPub_[1] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform2", 1000);
+    transformPub_[2] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform3", 1000);
+    transformPub_[3] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform4", 1000);
+    transformPub_[4] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform5", 1000);
+
+    transform_sub_[0].subscribe(nodeHandle_, "transform1", 1000);
+    transform_sub_[1].subscribe(nodeHandle_, "transform2", 1000);
+    transform_sub_[2].subscribe(nodeHandle_, "transform3", 1000);
+    transform_sub_[3].subscribe(nodeHandle_, "transform4", 1000);
+    transform_sub_[4].subscribe(nodeHandle_, "transform5", 1000);
+
+    sync_.reset(new Sync(MySyncPolicy(10), transform_sub_[0], transform_sub_[1], transform_sub_[2],
+                transform_sub_[3], transform_sub_[4]));
+    sync_->registerCallback(boost::bind(&FindMarkers::transformCallback, this, _1, _2, _3, _4, _5));
+
 
     pub_ = nodeHandle_.advertise<sensor_msgs::Image>(params_.outTopic, 1);
     // image_sub_.subscribe(nodeHandle_, params_.inTopic, params_.queue);
@@ -30,11 +43,6 @@ void FindMarkers::start(){
 
     // Transform publisher
     // TODO remove hardocoding
-    transformPub_[0] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform1", 1000);
-    transformPub_[1] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform2", 1000);
-    transformPub_[2] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform3", 1000);
-    transformPub_[3] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform4", 1000);
-    transformPub_[4] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform5", 1000);
 };
 
 std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point2d>> FindMarkers::findCenters(cv::Mat image, double imageWidth){
@@ -477,11 +485,10 @@ void FindMarkers::publishTransform(cv::Mat rvec, cv::Mat tvec, std_msgs::Header 
     }
 
     // Find on which topic to publish
-    int kinect = FindMarkers::findInteger(header.frame_id);
+    int kinect_number = FindMarkers::findInteger(header.frame_id);
 
-    transformPub_[kinect-1].publish(transformStamped);
+    transformPub_[kinect_number-1].publish(transformStamped);
 }
-
 
 double FindMarkers::findInteger(std::string str){
     // Finds the first and last position where a digit appears
@@ -500,4 +507,21 @@ double FindMarkers::findInteger(std::string str){
 
     int integer = atoi( str.substr(start, end-1).c_str());
     return integer;
+}
+
+void FindMarkers::transformCallback(const geometry_msgs::TransformStampedConstPtr& transf1, const geometry_msgs::TransformStampedConstPtr& transf2, 
+                const geometry_msgs::TransformStampedConstPtr& transf3, const geometry_msgs::TransformStampedConstPtr& transf4, 
+                const geometry_msgs::TransformStampedConstPtr& transf5){
+    
+    if(transf1->transform.translation.z!=0.0 && transf2->transform.translation.z!=0.0){
+        cv::Mat positions = computePosition(transf1->transform, transf2->transform);
+    }
+    // printf("%f\n", transf1->transform.translation.z);
+    
+}
+
+cv::Mat FindMarkers::computePosition(geometry_msgs::Transform pos1, geometry_msgs::Transform pos2){
+    cv::Mat test;
+    // printf("inside-> z1: %f\n", pos1.translation.z);
+    return test;
 }

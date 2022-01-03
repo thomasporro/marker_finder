@@ -48,30 +48,28 @@ private:
     image_transport::CameraSubscriber kinect1_, kinect2_, kinect3_, kinect4_, kinect5_;
 
     ros::Publisher pub_;
-    message_filters::Subscriber<sensor_msgs::Image> image_sub_;
-    message_filters::Subscriber<sensor_msgs::CameraInfo> info_sub_;
-    typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::CameraInfo, 
-                sensor_msgs::Image, sensor_msgs::CameraInfo> MySyncPolicy;
+    message_filters::Subscriber<geometry_msgs::TransformStamped> transform_sub_[5];
+    typedef message_filters::sync_policies::ApproximateTime<geometry_msgs::TransformStamped, geometry_msgs::TransformStamped, 
+                geometry_msgs::TransformStamped, geometry_msgs::TransformStamped, geometry_msgs::TransformStamped> MySyncPolicy;
     typedef message_filters::Synchronizer<MySyncPolicy> Sync;
     boost::shared_ptr<Sync> sync_;
 
     // Publisher for the relative position of the camera respect to the wan
     ros::Publisher transformPub_[5];
 
-    //Test
-    message_filters::Subscriber<sensor_msgs::Image> image_sub2_;
-    message_filters::Subscriber<sensor_msgs::CameraInfo> info_sub2_;
-    static tf2_ros::StaticTransformBroadcaster static_broadcaster_;
-
     std::string getImageEncoding();
     std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point2d>> findCenters(cv::Mat image, double imageWidth);
-    void listenerCallback(const sensor_msgs::ImageConstPtr& Image, const sensor_msgs::CameraInfoConstPtr& info);
     cv::Mat drawMarkers(const cv::Mat& image, std::vector<std::vector<cv::Point>> contours, std::vector<cv::Point2d> centers);
     cv::Mat convertImage(const cv::Mat& image, const std::string encoding);
     std::vector<cv::Point2d> orderPoints(std::vector<cv::Point2d> points);
     void publishTransform(cv::Mat rvec, cv::Mat tvec, std_msgs::Header header);
-
     double findInteger(std::string str);
+
+    void listenerCallback(const sensor_msgs::ImageConstPtr& Image, const sensor_msgs::CameraInfoConstPtr& info);
+    void transformCallback(const geometry_msgs::TransformStampedConstPtr& transf1, const geometry_msgs::TransformStampedConstPtr& transf2, 
+                const geometry_msgs::TransformStampedConstPtr& transf3, const geometry_msgs::TransformStampedConstPtr& transf4, 
+                const geometry_msgs::TransformStampedConstPtr& transf5);
+    cv::Mat computePosition(geometry_msgs::Transform pos1, geometry_msgs::Transform pos2);
 };
 
 #endif
