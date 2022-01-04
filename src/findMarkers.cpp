@@ -36,12 +36,7 @@ void FindMarkers::start(){
 
 
     pub_ = nodeHandle_.advertise<sensor_msgs::Image>(params_.outTopic, 1);
-    // image_sub_.subscribe(nodeHandle_, params_.inTopic, params_.queue);
-    // info_sub_.subscribe(nodeHandle_, params_.infoTopic, params_.queue);
-    // sync_.reset(new Sync(MySyncPolicy(10), image_sub_,  info_sub_));
-    // sync_->registerCallback(boost::bind(&FindMarkers::listenerCallback, this, _1, _2));
 
-    // Transform publisher
     // TODO remove hardocoding
 };
 
@@ -516,7 +511,33 @@ void FindMarkers::transformCallback(const geometry_msgs::TransformStampedConstPt
     if(transf1->transform.translation.z!=0.0 && transf2->transform.translation.z!=0.0){
         cv::Mat positions = computePosition(transf1->transform, transf2->transform);
     }
-    // printf("%f\n", transf1->transform.translation.z);
+    if(transf1->transform.translation.z!=0.0 && transf3->transform.translation.z!=0.0){
+        cv::Mat positions = computePosition(transf1->transform, transf3->transform);
+    }
+    if(transf1->transform.translation.z!=0.0 && transf4->transform.translation.z!=0.0){
+        cv::Mat positions = computePosition(transf1->transform, transf4->transform);
+    }
+    if(transf1->transform.translation.z!=0.0 && transf5->transform.translation.z!=0.0){
+        cv::Mat positions = computePosition(transf1->transform, transf5->transform);
+    }
+    if(transf2->transform.translation.z!=0.0 && transf3->transform.translation.z!=0.0){
+        cv::Mat positions = computePosition(transf2->transform, transf3->transform);
+    }
+    if(transf2->transform.translation.z!=0.0 && transf4->transform.translation.z!=0.0){
+        cv::Mat positions = computePosition(transf2->transform, transf4->transform);
+    }
+    if(transf2->transform.translation.z!=0.0 && transf5->transform.translation.z!=0.0){
+        cv::Mat positions = computePosition(transf2->transform, transf5->transform);
+    }
+    if(transf3->transform.translation.z!=0.0 && transf4->transform.translation.z!=0.0){
+        cv::Mat positions = computePosition(transf3->transform, transf4->transform);
+    }
+    if(transf3->transform.translation.z!=0.0 && transf5->transform.translation.z!=0.0){
+        cv::Mat positions = computePosition(transf3->transform, transf5->transform);
+    }
+    if(transf4->transform.translation.z!=0.0 && transf5->transform.translation.z!=0.0){
+        cv::Mat positions = computePosition(transf4->transform, transf5->transform);
+    }
     
 }
 
