@@ -546,13 +546,13 @@ cv::Mat FindMarkers::computePosition(geometry_msgs::Transform pos1, geometry_msg
     cv::Mat translation1(3, 1, CV_64FC1);
     cv::Mat translation2(3, 1, CV_64FC1);
 
-    translation1.at<double>(1, 0) = pos1.translation.x;
-    translation1.at<double>(2, 0) = pos1.translation.y;
-    translation1.at<double>(3, 0) = pos1.translation.z;
+    translation1.at<double>(0, 0) = pos1.translation.x;
+    translation1.at<double>(1, 0) = pos1.translation.y;
+    translation1.at<double>(2, 0) = pos1.translation.z;
 
-    translation2.at<double>(1, 0) = pos2.translation.x;
-    translation2.at<double>(2, 0) = pos2.translation.y;
-    translation2.at<double>(3, 0) = pos2.translation.z;
+    translation2.at<double>(0, 0) = pos2.translation.x;
+    translation2.at<double>(1, 0) = pos2.translation.y;
+    translation2.at<double>(2, 0) = pos2.translation.z;
     
     cv::Mat finalRotation(3, 3, CV_64FC1);
     cv::Mat finalTranslation(3, 3, CV_64FC1);
@@ -561,21 +561,15 @@ cv::Mat FindMarkers::computePosition(geometry_msgs::Transform pos1, geometry_msg
     finalRotation = rotation2.t() * rotation1;
     finalTranslation = rotation2.t() * (translation1 - translation2);
 
-    // Filling the output matrix (Not Working)
-    cv::Rect rect_rot(0, 0, finalRotation.rows, finalRotation.cols);
-    cv::Rect rect_transl(0, 3, finalTranslation.rows, finalTranslation.cols);
+    // Filling the output matrix
+    // In Rect documentation the inialization is based on x, y, width, height,
+    // so the concept of row, col is inverted
+    cv::Rect rect_rot(0, 0, finalRotation.cols, finalRotation.rows);
+    cv::Rect rect_transl(3, 0, finalTranslation.cols, finalTranslation.rows);
     cv::Mat output_R = output(rect_rot);
     cv::Mat output_T = output(rect_transl);
-    output_R = finalRotation;
-    output_T = finalTranslation;
-    
-    printf("inside\n");
+    finalRotation.copyTo(output_R);
+    finalTranslation.copyTo(output_T);
 
-    for(int i = 0; i < 4; i++){
-        printf("%f          %f          %f   \n", 
-            finalRotation.at<double>(i, 0), finalRotation.at<double>(i, 1), 
-            finalRotation.at<double>(i, 2));
-    }
-    printf("\n");
     return output;
 }
