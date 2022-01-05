@@ -58,7 +58,7 @@ private:
     ros::Publisher transformPub_[5];
     tf2_ros::StaticTransformBroadcaster static_broadcaster;
     // Boolean to check if a frame is already a child
-    bool isChild_[5] = {0};
+    bool isChild_[5] = {1};
 
     std::string getImageEncoding();
     std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point2d>> findCenters(cv::Mat image, double imageWidth);

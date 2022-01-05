@@ -517,10 +517,10 @@ void FindMarkers::transformCallback(const geometry_msgs::TransformStampedConstPt
         
         // Check if the boolean the boolean values works
         // At the moment is in test
-        if(isChild_[n_transf2] == false){
+        if(isChild_[n_transf2 - 1] == false){
             positions = computePosition(transf1->transform, transf2->transform);
-            transform = FindMarkers::createTransform(positions, transf1->header.frame_id, transf2->transform);
-        } else if(isChild_[n_transf1] == false){
+            transform = FindMarkers::createTransform(positions, transf1->header.frame_id, transf2->header.frame_id);
+        } else if(isChild_[n_transf1 - 1] == false){
             positions = computePosition(transf2->transform, transf1->transform);
             transform = FindMarkers::createTransform(positions, transf2->header.frame_id, transf3->header.frame_id);
         }
