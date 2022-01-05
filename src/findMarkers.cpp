@@ -509,36 +509,25 @@ void FindMarkers::transformCallback(const geometry_msgs::TransformStampedConstPt
                 const geometry_msgs::TransformStampedConstPtr& transf5){
     
     if(transf1->transform.translation.z!=0.0 && transf2->transform.translation.z!=0.0){
-        cv::Mat positions = computePosition(transf1->transform, transf2->transform);
-    }
-    if(transf1->transform.translation.z!=0.0 && transf3->transform.translation.z!=0.0){
-        cv::Mat positions = computePosition(transf1->transform, transf3->transform);
-    }
-    if(transf1->transform.translation.z!=0.0 && transf4->transform.translation.z!=0.0){
-        cv::Mat positions = computePosition(transf1->transform, transf4->transform);
-    }
-    if(transf1->transform.translation.z!=0.0 && transf5->transform.translation.z!=0.0){
-        cv::Mat positions = computePosition(transf1->transform, transf5->transform);
-    }
-    if(transf2->transform.translation.z!=0.0 && transf3->transform.translation.z!=0.0){
-        cv::Mat positions = computePosition(transf2->transform, transf3->transform);
-    }
-    if(transf2->transform.translation.z!=0.0 && transf4->transform.translation.z!=0.0){
-        cv::Mat positions = computePosition(transf2->transform, transf4->transform);
-    }
-    if(transf2->transform.translation.z!=0.0 && transf5->transform.translation.z!=0.0){
-        cv::Mat positions = computePosition(transf2->transform, transf5->transform);
-    }
-    if(transf3->transform.translation.z!=0.0 && transf4->transform.translation.z!=0.0){
-        cv::Mat positions = computePosition(transf3->transform, transf4->transform);
-    }
-    if(transf3->transform.translation.z!=0.0 && transf5->transform.translation.z!=0.0){
-        cv::Mat positions = computePosition(transf3->transform, transf5->transform);
-    }
-    if(transf4->transform.translation.z!=0.0 && transf5->transform.translation.z!=0.0){
-        cv::Mat positions = computePosition(transf4->transform, transf5->transform);
-    }
-    
+        cv::Mat positions;
+        geometry_msgs::TransformStamped transform;
+
+        int n_transf1 = FindMarkers::findInteger(transf1->header.frame_id);
+        int n_transf2 = FindMarkers::findInteger(transf2->header.frame_id);
+        
+        // Check if the boolean the boolean values works
+        // At the moment is in test
+        if(isChild_[n_transf2] == false){
+            positions = computePosition(transf1->transform, transf2->transform);
+            transform = FindMarkers::createTransform(positions, transf1->header.frame_id, transf2->transform);
+        } else if(isChild_[n_transf1] == false){
+            positions = computePosition(transf2->transform, transf1->transform);
+            transform = FindMarkers::createTransform(positions, transf2->header.frame_id, transf3->header.frame_id);
+        }
+
+        static_broadcaster.sendTransform(transform);
+    }   
+
 }
 
 cv::Mat FindMarkers::computePosition(geometry_msgs::Transform pos1, geometry_msgs::Transform pos2){
@@ -593,4 +582,30 @@ cv::Mat FindMarkers::computePosition(geometry_msgs::Transform pos1, geometry_msg
     finalTranslation.copyTo(output_T);
 
     return output;
+}
+
+geometry_msgs::TransformStamped FindMarkers::createTransform(cv::Mat matrix, std::string head_frame_id, std::string child_frame_id){
+    geometry_msgs::TransformStamped transform;
+    transform.header.stamp = ros::Time::now();
+    transform.header.frame_id = head_frame_id;
+    transform.child_frame_id = child_frame_id;
+
+    tf2::Vector3 translation(matrix.at<double>(3, 0), matrix.at<double>(3, 1), matrix.at<double>(3, 2));
+    tf2::Matrix3x3 tfMatrix(matrix.at<double>(0, 0), matrix.at<double>(0, 1), matrix.at<double>(0, 2),
+                            matrix.at<double>(1, 0), matrix.at<double>(1, 1), matrix.at<double>(1, 2),
+                            matrix.at<double>(2, 0), matrix.at<double>(2, 1), matrix.at<double>(2, 2));
+
+    tf2::Quaternion rotation;
+    tfMatrix.getRotation(rotation);
+
+    // Setting the message to be sent
+    transform.transform.rotation.x = rotation.x();
+    transform.transform.rotation.y = rotation.y();
+    transform.transform.rotation.z = rotation.z();
+    transform.transform.rotation.w = rotation.w();
+    transform.transform.translation.x = translation[0];
+    transform.transform.translation.y = translation[1];
+    transform.transform.translation.z = translation[2];
+
+    return transform;
 }

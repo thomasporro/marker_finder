@@ -56,6 +56,9 @@ private:
 
     // Publisher for the relative position of the camera respect to the wan
     ros::Publisher transformPub_[5];
+    tf2_ros::StaticTransformBroadcaster static_broadcaster;
+    // Boolean to check if a frame is already a child
+    bool isChild_[5] = {0};
 
     std::string getImageEncoding();
     std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point2d>> findCenters(cv::Mat image, double imageWidth);
@@ -70,6 +73,7 @@ private:
                 const geometry_msgs::TransformStampedConstPtr& transf3, const geometry_msgs::TransformStampedConstPtr& transf4, 
                 const geometry_msgs::TransformStampedConstPtr& transf5);
     cv::Mat computePosition(geometry_msgs::Transform pos1, geometry_msgs::Transform pos2);
+    geometry_msgs::TransformStamped createTransform(cv::Mat matrix, std::string head_frame, std::string child_frame);
 };
 
 #endif
