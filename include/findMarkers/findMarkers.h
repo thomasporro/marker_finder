@@ -29,9 +29,9 @@ public:
 
 private:
     const double scale16To8 = 1.0/256.0;
-    const double minDiameterRatio = 0.005;
+    const double minDiameterRatio = 0.0045;
     const double maxDiameterRatio = 0.15;
-    const double minCircularity = 0.85;
+    const double minCircularity = 0.80;
     const double maxCircularity = 1.05;
 
     struct Params{
@@ -60,6 +60,12 @@ private:
     // Boolean to check if a frame is already a child
     bool isChild_[5] = {1};
 
+    //Debugging the opencv part
+    ros::Publisher blur_;
+    ros::Publisher threshold_;
+    ros::Publisher dilate_;
+    ros::Publisher contours_;
+
     std::string getImageEncoding();
     std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point2d>> findCenters(cv::Mat image, double imageWidth);
     cv::Mat drawMarkers(const cv::Mat& image, std::vector<std::vector<cv::Point>> contours, std::vector<cv::Point2d> centers);
@@ -74,6 +80,8 @@ private:
                 const geometry_msgs::TransformStampedConstPtr& transf5);
     cv::Mat computePosition(geometry_msgs::Transform pos1, geometry_msgs::Transform pos2);
     geometry_msgs::TransformStamped createTransform(cv::Mat matrix, std::string head_frame, std::string child_frame);
+
+    bool isBetween(cv::Point x, cv::Point z, cv::Point y);
 };
 
 #endif

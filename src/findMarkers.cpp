@@ -5,6 +5,8 @@
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <geometry_msgs/TransformStamped.h>
 
+#include <cmath>
+
 void FindMarkers::start(){
 
     nodeHandle_.getParam("queue", params_.queue);
@@ -13,50 +15,90 @@ void FindMarkers::start(){
     nodeHandle_.getParam("infoTopic", params_.infoTopic);
 
     kinect1_ = tsp_.subscribeCamera("/k01/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
-    kinect2_ = tsp_.subscribeCamera("/k02/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
-    kinect3_ = tsp_.subscribeCamera("/k03/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
-    kinect4_ = tsp_.subscribeCamera("/k04/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
-    kinect5_ = tsp_.subscribeCamera("/k05/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
+    // kinect2_ = tsp_.subscribeCamera("/k02/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
+    // kinect3_ = tsp_.subscribeCamera("/k03/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
+    // kinect4_ = tsp_.subscribeCamera("/k04/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
+    // kinect5_ = tsp_.subscribeCamera("/k05/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
 
-    transformPub_[0] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform1", 1000);
-    transformPub_[1] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform2", 1000);
-    transformPub_[2] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform3", 1000);
-    transformPub_[3] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform4", 1000);
-    transformPub_[4] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform5", 1000);
+    // transformPub_[0] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform1", 1000);
+    // transformPub_[1] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform2", 1000);
+    // transformPub_[2] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform3", 1000);
+    // transformPub_[3] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform4", 1000);
+    // transformPub_[4] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform5", 1000);
 
-    transform_sub_[0].subscribe(nodeHandle_, "transform1", 1000);
-    transform_sub_[1].subscribe(nodeHandle_, "transform2", 1000);
-    transform_sub_[2].subscribe(nodeHandle_, "transform3", 1000);
-    transform_sub_[3].subscribe(nodeHandle_, "transform4", 1000);
-    transform_sub_[4].subscribe(nodeHandle_, "transform5", 1000);
+    // transform_sub_[0].subscribe(nodeHandle_, "transform1", 1000);
+    // transform_sub_[1].subscribe(nodeHandle_, "transform2", 1000);
+    // transform_sub_[2].subscribe(nodeHandle_, "transform3", 1000);
+    // transform_sub_[3].subscribe(nodeHandle_, "transform4", 1000);
+    // transform_sub_[4].subscribe(nodeHandle_, "transform5", 1000);
 
-    sync_.reset(new Sync(MySyncPolicy(10), transform_sub_[0], transform_sub_[1], transform_sub_[2],
-                transform_sub_[3], transform_sub_[4]));
-    sync_->registerCallback(boost::bind(&FindMarkers::transformCallback, this, _1, _2, _3, _4, _5));
+    // sync_.reset(new Sync(MySyncPolicy(10), transform_sub_[0], transform_sub_[1], transform_sub_[2],
+    //             transform_sub_[3], transform_sub_[4]));
+    // sync_->registerCallback(boost::bind(&FindMarkers::transformCallback, this, _1, _2, _3, _4, _5));
 
 
     pub_ = nodeHandle_.advertise<sensor_msgs::Image>(params_.outTopic, 1);
+    blur_ = nodeHandle_.advertise<sensor_msgs::Image>("GaussianBlur", 1);
+    threshold_ = nodeHandle_.advertise<sensor_msgs::Image>("threshold", 1);
+    dilate_ = nodeHandle_.advertise<sensor_msgs::Image>("dilate", 1);
+    contours_ = nodeHandle_.advertise<sensor_msgs::Image>("contours", 1);
 
     // TODO remove hardocoding
 };
 
 std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point2d>> FindMarkers::findCenters(cv::Mat image, double imageWidth){
+    cv_bridge::CvImage imgBlur;
+    cv_bridge::CvImage imgThreshold;
+    cv_bridge::CvImage imgDilate;
+    cv_bridge::CvImage imgContours;
+
+    imgBlur.encoding = sensor_msgs::image_encodings::MONO8;
+    imgThreshold.encoding = sensor_msgs::image_encodings::MONO8;
+    imgDilate.encoding = sensor_msgs::image_encodings::MONO8;
+    imgContours.encoding = sensor_msgs::image_encodings::BGR8;
+
+    std_msgs::Header header;
+    header.stamp = ros::Time::now();
+    header.frame_id = "test";
+
+    imgBlur.header = header;
+    imgThreshold.header = header;
+    imgDilate.header = header;
+    imgContours.header = header;
+    
     cv::Mat gray = image.clone();
 
-    cv::GaussianBlur(gray, gray, cv::Size(3, 3), 0, 0, cv::BORDER_DEFAULT);
+    // cv::GaussianBlur(gray, gray, cv::Size(3, 3), 0, 0, cv::BORDER_DEFAULT);
+    imgBlur.image = gray.clone();
     cv::threshold(gray, gray, 180, 255, cv::THRESH_BINARY);
+    imgThreshold.image = gray.clone();
 
     // Matrix used to dilate the image
-    cv::Mat element = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(7, 7));
+    cv::Mat element = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(3, 3));
     cv::dilate(gray, gray, element); 
+    imgDilate.image = gray.clone();
 
     std::vector<std::vector<cv::Point>> allContours; 
     std::vector<cv::Vec4i> hier;
     cv::findContours(gray, allContours, hier, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
 
+    cv::Mat colorata;
+    cv::cvtColor(gray, colorata, cv::COLOR_GRAY2BGR);
+
+    if(allContours.size() != 0)
+        cv::drawContours(colorata, allContours, -1, cv::Scalar(0, 0, 255), 1);
+    imgContours.image = colorata.clone();
+
+    //blur_.publish(imgBlur.toImageMsg());
+    threshold_.publish(imgThreshold.toImageMsg());
+    dilate_.publish(imgDilate.toImageMsg());
+    contours_.publish(imgContours.toImageMsg());
+
+
     std::vector<std::vector<cv::Point>> contours;
     std::vector<cv::Point2d> centers;
     std::vector<cv::Moments> momentsContours;
+    // printf("image width: %f\n", imageWidth);
 
     // Checks for the length of the contour's perimeter and for its area,
     // then if computes if it fits in the formula of a circle. If it is true
@@ -67,14 +109,15 @@ std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point2d>> FindMa
         double diameter = perimeter / M_PI;
         // Skips the perimeters that are too small and if is present a too
         // large perimetes it skips the entire frame
-    
-        if(diameter < FindMarkers::minDiameterRatio * imageWidth)
-            continue;
-        else if(diameter > FindMarkers::maxDiameterRatio * imageWidth)
-            continue;
+        // printf("diameter: %f\n", diameter);
+        // if(diameter < FindMarkers::minDiameterRatio * imageWidth)
+        //     continue;
+        // else if(diameter > FindMarkers::maxDiameterRatio * imageWidth)
+        //     continue;
 
         double circularity = 4 * M_PI * (area / (perimeter * perimeter));
-        if(circularity > minCircularity && circularity < maxCircularity){
+        //printf("circularity: %f\n", circularity);
+        if(/*circularity > minCircularity && circularity < maxCircularity*/ circularity > 0.70){
             contours.push_back(contour);
             momentsContours.push_back(cv::moments(contour));
         }
@@ -114,7 +157,6 @@ std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point2d>> FindMa
 };
 
 void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, const sensor_msgs::CameraInfoConstPtr& info){
-
    
     cv_bridge::CvImagePtr imgPointer;
     cv_bridge::CvImage imgPointerColor;
@@ -136,13 +178,14 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
     }
     
 
-    // std::vector<cv::Point3d> planePoints{cv::Point3d(0.0 , 0.0, 0.0), cv::Point3d(0.0, 0.3, 0.0), 
-    //                      cv::Point3d(0.3, 0.3, 0.0), cv::Point3d(0.3, 0.0, 0.0)};
-    // std::vector<cv::Point2d> projectedPlanePoints;
+    std::vector<cv::Point3d> planePoints{cv::Point3d(0.0 , 0.0, 0.0), cv::Point3d(0.0, 0.3, 0.0), 
+                         cv::Point3d(0.3, 0.3, 0.0), cv::Point3d(0.3, 0.0, 0.0)};
+    std::vector<cv::Point2d> projectedPlanePoints;
 
 
     std::vector<cv::Point2d> projectedPoints;
     cv::Mat rvec, tvec;
+    int collinear = 1;
     if(std::get<1>(cont_cent).size()==5){
         std::vector<cv::Point3d> objectPoints{cv::Point3d(0.0, 0.0, 0.0), cv::Point3d(0.2, 0.0, 0.0), 
                     cv::Point3d(0.3, 0.0, 0.0), cv::Point3d(0.2, 0.125, 0.0), cv::Point3d(0.2, 0.25, 0.0)};
@@ -152,63 +195,66 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
         std::vector<cv::Point2d> imagePoints;
         for(int i=0; i<imagePoints2.size();i++){
             imagePoints.push_back((cv::Point2d)imagePoints2[i]);
+            if(imagePoints2[i].x == -1.0){
+                flag=0;
+            }
         }
 
-        // Brute force for creating matrix
-        // TODO search if it is possible to improve
-        cv::Mat cameraMatrix(3, 3, CV_64FC1);
-        for(int i = 0; i<info->K.size(); i++){
-            cameraMatrix.at<double>(i/3, i%3) = info->K.at(i);
+        if(collinear){
+            // Brute force for creating matrix
+            // TODO search if it is possible to improve
+            cv::Mat cameraMatrix(3, 3, CV_64FC1);
+            for(int i = 0; i<info->K.size(); i++){
+                cameraMatrix.at<double>(i/3, i%3) = info->K.at(i);
+            }
+
+            cv::solvePnP(objectPoints, imagePoints, cameraMatrix, info->D, rvec, tvec, false, cv::SOLVEPNP_ITERATIVE);
+            // cv::solvePnPRansac(objectPoints, imagePoints, cameraMatrix, info->D, rvec, tvec, false, 1000, 1.5, 0.99, cv::noArray(), cv::SOLVEPNP_EPNP);
+            
+            // Converts the rotation matrix into rotation vector
+            cv::Mat rotationMatrix;
+            cv::Rodrigues(rvec, rotationMatrix);
+
+            // Computing the mean error of solvePnP by reprojecting the objects point into
+            // the camera plane
+            cv::projectPoints(objectPoints, rvec, tvec, cameraMatrix, info->D, projectedPoints);
+            // double meanError = cv::norm(imagePoints, projectedPoints, cv::NORM_L2);
+            // printf("Error on reprojection: %f\n", meanError);
+
+
+            // Debugging lines
+            cv::projectPoints(planePoints, rvec, tvec, cameraMatrix, info->D, projectedPlanePoints);
+
+            cv::Mat translateRotation;
+            cv::transpose(rotationMatrix, translateRotation);
+
+            //Finds the camera coordinates by inverting the projection matrix
+            cv::Mat wrlCoordinates = (-translateRotation) * tvec;
+
+            // printf("Coordinates: %f %f %f\n", wrlCoordinates.at<double>(0, 0), 
+            //         wrlCoordinates.at<double>(0, 1), wrlCoordinates.at<double>(0, 2));
+
         }
-
-        cv::solvePnP(objectPoints, imagePoints, cameraMatrix, info->D, rvec, tvec, false, cv::SOLVEPNP_ITERATIVE);
-        // cv::solvePnPRansac(objectPoints, imagePoints, cameraMatrix, info->D, rvec, tvec, false, 1000, 1.5, 0.99, cv::noArray(), cv::SOLVEPNP_EPNP);
-        
-        // Converts the rotation matrix into rotation vector
-        cv::Mat rotationMatrix;
-        cv::Rodrigues(rvec, rotationMatrix);
-
-        // Computing the mean error of solvePnP by reprojecting the objects point into
-        // the camera plane
-        cv::projectPoints(objectPoints, rvec, tvec, cameraMatrix, info->D, projectedPoints);
-        // double meanError = cv::norm(imagePoints, projectedPoints, cv::NORM_L2);
-        // printf("Error on reprojection: %f\n", meanError);
-
-
-        // Debugging lines
-        // cv::projectPoints(planePoints, rvec, tvec, cameraMatrix, info->D, projectedPlanePoints);
-
-        cv::Mat translateRotation;
-        cv::transpose(rotationMatrix, translateRotation);
-
-        //Finds the camera coordinates by inverting the projection matrix
-        cv::Mat wrlCoordinates = (-translateRotation) * tvec;
-
-        // printf("Coordinates: %f %f %f\n", wrlCoordinates.at<double>(0, 0), 
-        //         wrlCoordinates.at<double>(0, 1), wrlCoordinates.at<double>(0, 2));
-
-       
     }
     FindMarkers::publishTransform(rvec, tvec, info->header);
 
     cv::Mat colorImage;    
-    if(std::get<1>(cont_cent).size()==5){
-        // colorImage = FindMarkers::drawMarkers(tmpImage, std::get<0>(cont_cent), projectedPoints);
-        colorImage = FindMarkers::drawMarkers(tmpImage, std::get<0>(cont_cent), std::get<1>(cont_cent));
+    if(std::get<1>(cont_cent).size()==5 && collinear){
+        colorImage = FindMarkers::drawMarkers(tmpImage, std::get<0>(cont_cent), projectedPoints);
+        // colorImage = FindMarkers::drawMarkers(tmpImage, std::get<0>(cont_cent), std::get<1>(cont_cent));
 
 
         // Draw the bounding box that show us the plane
-        // cv::Scalar blueColor(255, 0, 0);
-        // int thickness = 2;
-        // std::vector<cv::Point> finalPoints;
-        // for(int i=0; i<projectedPlanePoints.size(); i++){
-        //     finalPoints.push_back(cv::Point(projectedPlanePoints[i].x, projectedPlanePoints[i].y));
-        // }
-        // projectedPlanePoints.clear();
-        // planePoints.clear();
-        // cv::polylines(colorImage, finalPoints, true, blueColor, thickness, cv::FILLED, 0);
+        cv::Scalar blueColor(255, 0, 0);
+        int thickness = 2;
+        std::vector<cv::Point> finalPoints;
+        for(int i=0; i<projectedPlanePoints.size(); i++){
+            finalPoints.push_back(cv::Point(projectedPlanePoints[i].x, projectedPlanePoints[i].y));
+        }
+        projectedPlanePoints.clear();
+        planePoints.clear();
+        cv::polylines(colorImage, finalPoints, true, blueColor, thickness, cv::FILLED, 0);
 
-        //Trying the new method
         
         
     }
@@ -222,7 +268,7 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
     imgPointerColor.encoding = sensor_msgs::image_encodings::BGR8;
     imgPointerColor.image = colorImage;
 
-    // pub_.publish(imgPointerColor.toImageMsg());
+    pub_.publish(imgPointerColor.toImageMsg());
     
 };
 
@@ -286,9 +332,8 @@ std::vector<cv::Point2d> FindMarkers::orderPoints(std::vector<cv::Point2d> point
                 cv::Point2d p1 = points[i];
                 cv::Point2d p2 = points[j];
                 cv::Point2d p3 = points[k];
-                double area = 0.5 * (p1.x*(p2.y-p3.y)+p2.x*(p3.y-p1.y)+p3.x*(p1.y-p2.y));
-                if(area < 75 && area > -75){
-                    // printf("area: %f\n", area);
+                int cross = (p2.y - p1.y) * (p3.x - p2.x) - (p3.y - p2.y) * (p2.x - p1.x);
+                if(cross < 50 && cross > -50){
                     lines.push_back(std::vector<cv::Point2d> {p1, p2, p3});
                 }
             }
@@ -304,142 +349,64 @@ std::vector<cv::Point2d> FindMarkers::orderPoints(std::vector<cv::Point2d> point
         cv::Point2d p2 = lines[i][1];
         cv::Point2d p3 = lines[i][2];
 
-        
-        double dist_p1p2= cv::norm(p1-p2);
-        double dist_p1p3= cv::norm(p1-p3);
-        double dist_p2p3= cv::norm(p2-p3);
+        cv::Point2d center;
+        cv::Point2d right;
+        cv::Point2d left;
 
-        // All combination of possible division in order to find 
-        // the one correct
-        double p2p1p3 = dist_p1p2/dist_p1p3;
-        double p1p2p3 = dist_p1p2/dist_p2p3;
-        double p1p3p2 = dist_p1p3/dist_p2p3;
-        double p3p1p2 = dist_p1p3/dist_p1p2;
-        double p3p2p1 = dist_p2p3/dist_p1p2;
-        double p2p3p1 = dist_p2p3/dist_p1p3;
+        if(FindMarkers::isBetween(p2, p1, p3)){
+            center = p1;
+            right = p3;
+            left = p2;
+        } else if(FindMarkers::isBetween(p1, p2, p3)){
+            center = p2;
+            right = p3;
+            left = p1;
+        } else if(FindMarkers::isBetween(p1, p3, p2)){
+            center = p3;
+            right = p2;
+            left = p1;
+        }
 
-        // Search for the horizontal part of the wand
-        if(p2p1p3 > 0.60 && p2p1p3 < 0.76){
-            outputPoints[0] = p1;
-            outputPoints[2] = p3;
-            // A point is already there
+        double fraction =  cv::norm(left-center) / cv::norm(center-right);
+
+        if(fraction > 1.7 && fraction < 2.3){
+            outputPoints[0] = left;
+            outputPoints[2] = right;
             if(outputPoints[1].x != -1.0){
-                // If the point is not equal to p2, inverts out[4] and out[1]
-                if(!(outputPoints[1].x == p2.x && outputPoints[1].y == p2.y)){
+                // If the point is not equal to center, inverts out[4] and out[1]
+                if(!(outputPoints[1].x == center.x && outputPoints[1].y == center.y)){
                     outputPoints[4] = outputPoints[1];
-                    outputPoints[1] = p2;
+                    outputPoints[1] = center;
                 }
             } else {
-                outputPoints[1] = p2;
+                outputPoints[1] = center;
             }
-        } else if(p1p2p3 > 0.60 && p1p2p3 < 0.76){
-            outputPoints[0] = p2;
-            outputPoints[2] = p3;
-            // A point is already there
+        } else if(fraction > 0.4 && fraction < 0.6){
+            outputPoints[0] = right;
+            outputPoints[2] = left;
             if(outputPoints[1].x != -1.0){
-                // If the point is not equal to p1, inverts out[4] and out[1]
-                if(!(outputPoints[1].x == p1.x && outputPoints[1].y == p1.y)){
+                // If the point is not equal to center, inverts out[4] and out[1]
+                if(!(outputPoints[1].x == center.x && outputPoints[1].y == center.y)){
                     outputPoints[4] = outputPoints[1];
-                    outputPoints[1] = p1;
+                    outputPoints[1] = center;
                 }
             } else {
-                outputPoints[1] = p1;
+                outputPoints[1] = center;
             }
-        } else if(p1p3p2 > 0.60 && p1p3p2 < 0.76){
-            outputPoints[0] = p3;
-            outputPoints[2] = p2;
-            // A point is already there
+        } else if(fraction > 0.7 && fraction < 1.4) {
+            outputPoints[3] = center;
             if(outputPoints[1].x != -1.0){
-                // If the point is not equal to p1, inverts out[4] and out[1]
-                if(!(outputPoints[1].x == p1.x && outputPoints[1].y == p1.y)){
-                    outputPoints[4] = outputPoints[1];
-                    outputPoints[1] = p1;
+                if(outputPoints[1].x == left.x && outputPoints[1].y == left.y){
+                    outputPoints[4] = right;
+                } else {
+                    outputPoints[4] = left;
                 }
             } else {
-                outputPoints[1] = p1;
-            }
-        } else if(p3p1p2 > 0.60 && p3p1p2 < 0.76){
-            outputPoints[0] = p1;
-            outputPoints[2] = p2;
-            // A point is already there
-            if(outputPoints[1].x != -1.0){
-                // If the point is not equal to p3, inverts out[4] and out[1]
-                if(!(outputPoints[1].x == p3.x && outputPoints[1].y == p3.y)){
-                    outputPoints[4] = outputPoints[1];
-                    outputPoints[1] = p3;
-                }
-            } else {
-                outputPoints[1] = p3;
-            }
-        }else if(p3p2p1 > 0.60 && p3p2p1 < 0.76){
-            outputPoints[0] = p2;
-            outputPoints[2] = p1;
-            // A point is already there
-            if(outputPoints[1].x != -1.0){
-                // If the point is not equal to p3, inverts out[4] and out[1]
-                if(!(outputPoints[1].x == p3.x && outputPoints[1].y == p3.y)){
-                    outputPoints[4] = outputPoints[1];
-                    outputPoints[1] = p3;
-                }
-            } else {
-                outputPoints[1] = p3;
-            }
-        } else if(p2p3p1 > 0.60 && p2p3p1 < 0.76){
-            outputPoints[0] = p3;
-            outputPoints[2] = p1;
-            // A point is already there
-            if(outputPoints[1].x != -1.0){
-                // If the point is not equal to p2, inverts out[4] and out[1]
-                if(!(outputPoints[1].x == p2.x && outputPoints[1].y == p2.y)){
-                    outputPoints[4] = outputPoints[1];
-                    outputPoints[1] = p2;
-                }
-            } else {
-                outputPoints[1] = p2;
+                outputPoints[1] = left;
+                outputPoints[4] = right;
             }
         }
 
-        // Search the vertical part of the wand
-        if(p2p1p3 > 0.90 && p2p1p3 < 1.20){
-            outputPoints[3] = p1;
-            // A point is already there
-            if(outputPoints[1].x != -1.0){
-                if(outputPoints[1].x == p2.x && outputPoints[1].y == p2.y){
-                    outputPoints[4] = p3;
-                } else {
-                    outputPoints[4] = p2;
-                }
-            } else {
-                outputPoints[1] = p2;
-                outputPoints[4] = p3;
-            }
-        } else if(p1p2p3 > 0.90 && p1p2p3 < 1.20){
-            outputPoints[3] = p2;
-            // A point is already there
-            if(outputPoints[1].x != -1.0){
-                if(outputPoints[1].x == p1.x && outputPoints[1].y == p1.y){
-                    outputPoints[4] = p3;
-                } else {
-                    outputPoints[4] = p1;
-                }
-            } else {
-                outputPoints[1] = p1;
-                outputPoints[4] = p3;
-            }
-        } else if(p1p3p2 > 0.90 && p1p3p2 < 1.20){
-            outputPoints[3] = p3;
-            // A point is already there
-            if(outputPoints[1].x != -1.0){
-                if(outputPoints[1].x == p1.x && outputPoints[1].y == p1.y){
-                    outputPoints[4] = p2;
-                } else {
-                    outputPoints[4] = p1;
-                }
-            } else {
-                outputPoints[1] = p1;
-                outputPoints[4] = p2;
-            }
-        }
     }
     return outputPoints;
 }
@@ -609,3 +576,17 @@ geometry_msgs::TransformStamped FindMarkers::createTransform(cv::Mat matrix, std
 
     return transform;
 }
+
+bool FindMarkers::isBetween(cv::Point x, cv::Point z, cv::Point y){
+    double dotProduct = (z.x - x.x) * (y.x - x.x) + (z.y - x.y) * (y.y - x.y);
+    if(dotProduct < 0.0)
+        return false;
+
+    double sqrtlength = (x.x - y.x) * (x.x - y.x) + (x.y - y.y) * (x.y - y.y);
+    if(dotProduct > sqrtlength)
+        return false;
+
+
+    return true;
+}
+
