@@ -196,7 +196,7 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
         for(int i=0; i<imagePoints2.size();i++){
             imagePoints.push_back((cv::Point2d)imagePoints2[i]);
             if(imagePoints2[i].x == -1.0){
-                flag=0;
+                collinear=0;
             }
         }
 
