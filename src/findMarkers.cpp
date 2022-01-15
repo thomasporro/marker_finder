@@ -14,10 +14,10 @@ void FindMarkers::start(){
     nodeHandle_.getParam("outTopic", params_.outTopic);
     nodeHandle_.getParam("infoTopic", params_.infoTopic);
 
-    kinect1_ = tsp_.subscribeCamera("/k01/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
+    // kinect1_ = tsp_.subscribeCamera("/k01/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
     // kinect2_ = tsp_.subscribeCamera("/k02/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
     // kinect3_ = tsp_.subscribeCamera("/k03/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
-    // kinect4_ = tsp_.subscribeCamera("/k04/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
+    kinect4_ = tsp_.subscribeCamera("/k04/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
     // kinect5_ = tsp_.subscribeCamera("/k05/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
 
     // transformPub_[0] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform1", 1000);
@@ -142,18 +142,6 @@ std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point2d>> FindMa
     // }
 
     return std::make_tuple(contours, centers);
-    
-
-    // std::vector<std::vector<cv::Point>> contours;
-    // std::vector<cv::Point2d> centers;
-    // cv::GaussianBlur(gray, gray, cv::Size(3, 3), 0, 0, cv::BORDER_DEFAULT);
-    // cv::threshold(gray, gray, 150, 255, cv::THRESH_BINARY);
-    // std::vector<cv::Vec3f> circles;
-    // cv:HoughCircles(gray, circles, cv::HOUGH_GRADIENT, 2, 5, 50, 10, 1, 50);
-    // for(int i = 0; i < circles.size(); i++){
-    //     centers.push_back(cv::Point2d(cvRound(circles[i][0]), cvRound(circles[i][1])));
-    // }
-    // return std::make_tuple(contours, centers);
 };
 
 void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, const sensor_msgs::CameraInfoConstPtr& info){
@@ -172,6 +160,17 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
     try{
         //Convert image in the correct format for opencv
         tmpImage = FindMarkers::convertImage(imgPointer->image, image->encoding);
+
+        //Mask to remove part of the image where the IR light is reflected by others kinects
+        cv::Mat mask = cv::Mat::zeros(image->height, image->width, tmpImage.type());
+        int n_kinect = FindMarkers::findInteger(info->header.frame_id);
+        if(n_kinect == 1){
+            cv::circle(mask, cv::Point(482, 64), 15, (255, 255, 255), -1);
+        } else if (n_kinect == 4){
+            cv::circle(mask, cv::Point(127, 32), 15, (255, 255, 255), -1);
+        }
+        cv::subtract(tmpImage, mask, tmpImage);
+        
         cont_cent = FindMarkers::findCenters(tmpImage, image->width);
     } catch (cv::Exception e) {
         ROS_ERROR("Error while finding the centers of the markers: %s\n", e.what());
