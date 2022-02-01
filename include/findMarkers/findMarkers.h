@@ -12,7 +12,7 @@
 #include <message_filters/subscriber.h>
 #include <message_filters/time_synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
-
+#include "tf2_ros/transform_broadcaster.h"
 
 //Test
 #include <tf2_ros/static_transform_broadcaster.h>
@@ -45,6 +45,8 @@ private:
 
     image_transport::ImageTransport tsp_;
     image_transport::CameraSubscriber kinect_;
+
+    tf2_ros::TransformBroadcaster tf_broadcaster_;
 
     ros::Publisher transformPub_;
     message_filters::Subscriber<geometry_msgs::TransformStamped> transform_sub_[5];

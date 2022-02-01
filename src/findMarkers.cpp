@@ -445,6 +445,7 @@ void FindMarkers::publishTransform(cv::Mat rvec, cv::Mat tvec, std_msgs::Header 
     }
 
     transformPub_.publish(transformStamped);
+    tf_broadcaster_.sendTransform(transformStamped);
 }
 
 
