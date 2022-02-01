@@ -4,6 +4,7 @@
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <geometry_msgs/TransformStamped.h>
+#include <tf2_ros/transform_listener.h>
 
 #include <cmath>
 
@@ -12,14 +13,11 @@ void FindMarkers::start(){
     nodeHandle_.getParam("queue", params_.queue);
     nodeHandle_.getParam("inTopic", params_.inTopic);
     nodeHandle_.getParam("outTopic", params_.outTopic);
-    nodeHandle_.getParam("infoTopic", params_.infoTopic);
 
-    // kinect1_ = tsp_.subscribeCamera("/k01/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
-    // kinect2_ = tsp_.subscribeCamera("/k02/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
-    // kinect3_ = tsp_.subscribeCamera("/k03/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
-    kinect4_ = tsp_.subscribeCamera("/k04/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
-    // kinect5_ = tsp_.subscribeCamera("/k05/ir/image_rect", params_.queue, &FindMarkers::listenerCallback, this);
+    kinect_ = tsp_.subscribeCamera(params_.inTopic, params_.queue, &FindMarkers::listenerCallback, this);
 
+    transformPub_ = nodeHandle_.advertise<geometry_msgs::TransformStamped>(params_.outTopic, 1000);
+    
     // transformPub_[0] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform1", 1000);
     // transformPub_[1] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform2", 1000);
     // transformPub_[2] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform3", 1000);
@@ -37,13 +35,12 @@ void FindMarkers::start(){
     // sync_->registerCallback(boost::bind(&FindMarkers::transformCallback, this, _1, _2, _3, _4, _5));
 
 
-    pub_ = nodeHandle_.advertise<sensor_msgs::Image>(params_.outTopic, 1);
+    // pub_ = nodeHandle_.advertise<sensor_msgs::Image>(params_.outTopic, 1);
     blur_ = nodeHandle_.advertise<sensor_msgs::Image>("GaussianBlur", 1);
     threshold_ = nodeHandle_.advertise<sensor_msgs::Image>("threshold", 1);
     dilate_ = nodeHandle_.advertise<sensor_msgs::Image>("dilate", 1);
     contours_ = nodeHandle_.advertise<sensor_msgs::Image>("contours", 1);
 
-    // TODO remove hardocoding
 };
 
 std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point2d>> FindMarkers::findCenters(cv::Mat image, double imageWidth){
@@ -76,7 +73,7 @@ std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point2d>> FindMa
     // Matrix used to dilate the image
     cv::Mat element = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(3, 3));
     cv::dilate(gray, gray, element); 
-    imgDilate.image = gray.clone();
+    // imgDilate.image = gray.clone();
 
     std::vector<std::vector<cv::Point>> allContours; 
     std::vector<cv::Vec4i> hier;
@@ -161,22 +158,26 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
         //Convert image in the correct format for opencv
         tmpImage = FindMarkers::convertImage(imgPointer->image, image->encoding);
 
-        //Mask to remove part of the image where the IR light is reflected by others kinects
+        // Mask to remove part of the image where the IR light is reflected by others kinects
+        // it happens only with the kinect number one and four
         cv::Mat mask = cv::Mat::zeros(image->height, image->width, tmpImage.type());
         int n_kinect = FindMarkers::findInteger(info->header.frame_id);
+        cv::Scalar whiteColor(255, 255, 255);
+        int radius = 15;
         if(n_kinect == 1){
-            cv::circle(mask, cv::Point(482, 64), 15, (255, 255, 255), -1);
+            cv::circle(mask, cv::Point(482, 64), radius, whiteColor, cv::FILLED);
         } else if (n_kinect == 4){
-            cv::circle(mask, cv::Point(127, 32), 15, (255, 255, 255), -1);
+            cv::circle(mask, cv::Point(127, 32), radius, whiteColor, cv::FILLED);
         }
         cv::subtract(tmpImage, mask, tmpImage);
         
         cont_cent = FindMarkers::findCenters(tmpImage, image->width);
     } catch (cv::Exception e) {
         ROS_ERROR("Error while finding the centers of the markers: %s\n", e.what());
+        return;
     }
     
-
+    // Points used to dispaly the plane on screen
     std::vector<cv::Point3d> planePoints{cv::Point3d(0.0 , 0.0, 0.0), cv::Point3d(0.0, 0.3, 0.0), 
                          cv::Point3d(0.3, 0.3, 0.0), cv::Point3d(0.3, 0.0, 0.0)};
     std::vector<cv::Point2d> projectedPlanePoints;
@@ -190,11 +191,11 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
                     cv::Point3d(0.3, 0.0, 0.0), cv::Point3d(0.2, 0.125, 0.0), cv::Point3d(0.2, 0.25, 0.0)};
 
         // Orders the point to be consistent with the objects points
-        std::vector<cv::Point2d> imagePoints2 = FindMarkers::orderPoints(std::get<1>(cont_cent));
+        std::vector<cv::Point2d> orderedImagePoints = FindMarkers::orderPoints(std::get<1>(cont_cent));
         std::vector<cv::Point2d> imagePoints;
-        for(int i=0; i<imagePoints2.size();i++){
-            imagePoints.push_back((cv::Point2d)imagePoints2[i]);
-            if(imagePoints2[i].x == -1.0){
+        for(int i=0; i<orderedImagePoints.size();i++){
+            imagePoints.push_back((cv::Point2d)orderedImagePoints[i]);
+            if(orderedImagePoints[i].x == -1.0){
                 collinear=0;
             }
         }
@@ -220,7 +221,6 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
             // double meanError = cv::norm(imagePoints, projectedPoints, cv::NORM_L2);
             // printf("Error on reprojection: %f\n", meanError);
 
-
             // Debugging lines
             cv::projectPoints(planePoints, rvec, tvec, cameraMatrix, info->D, projectedPlanePoints);
 
@@ -232,16 +232,17 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
 
             // printf("Coordinates: %f %f %f\n", wrlCoordinates.at<double>(0, 0), 
             //         wrlCoordinates.at<double>(0, 1), wrlCoordinates.at<double>(0, 2));
-
         }
     }
-    FindMarkers::publishTransform(rvec, tvec, info->header);
+    
 
     cv::Mat colorImage;    
     if(std::get<1>(cont_cent).size()==5 && collinear){
+        // If it finds the markers send the transform to the static broadcaster
+        FindMarkers::publishTransform(rvec, tvec, image->header);
+
         colorImage = FindMarkers::drawMarkers(tmpImage, std::get<0>(cont_cent), projectedPoints);
         // colorImage = FindMarkers::drawMarkers(tmpImage, std::get<0>(cont_cent), std::get<1>(cont_cent));
-
 
         // Draw the bounding box that show us the plane
         cv::Scalar blueColor(255, 0, 0);
@@ -253,13 +254,10 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
         projectedPlanePoints.clear();
         planePoints.clear();
         cv::polylines(colorImage, finalPoints, true, blueColor, thickness, cv::FILLED, 0);
-
-        
         
     }
     else{
         colorImage = FindMarkers::drawMarkers(tmpImage, std::get<0>(cont_cent), std::get<1>(cont_cent));
-        //cv::cvtColor(colorImage, tmpImage, cv::COLOR_GRAY2BGR);
     }
 
     
@@ -267,7 +265,7 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
     imgPointerColor.encoding = sensor_msgs::image_encodings::BGR8;
     imgPointerColor.image = colorImage;
 
-    pub_.publish(imgPointerColor.toImageMsg());
+    // pub_.publish(imgPointerColor.toImageMsg());
     
 };
 
@@ -410,21 +408,22 @@ std::vector<cv::Point2d> FindMarkers::orderPoints(std::vector<cv::Point2d> point
     return outputPoints;
 }
 
+
 void FindMarkers::publishTransform(cv::Mat rvec, cv::Mat tvec, std_msgs::Header header){
     // Setting the message to be sent
     geometry_msgs::TransformStamped transformStamped;
     transformStamped.header = header;
-    transformStamped.child_frame_id = header.frame_id;
+    // transformStamped.header.frame_id = "world";
+    // transformStamped.child_frame_id = header.frame_id;
+    transformStamped.child_frame_id = "world";
+    // printf("%s\n", header.frame_id.c_str());
+    // tf2_ros::Buffer tf_buffer;
+    // tf2_ros::TransformListener tf_listener(tf_buffer);
 
-    if(rvec.empty() || tvec.empty()){
-        transformStamped.transform.rotation.x = 0.0;
-        transformStamped.transform.rotation.y = 0.0;
-        transformStamped.transform.rotation.z = 0.0;
-        transformStamped.transform.rotation.w = 0.0;
-        transformStamped.transform.translation.x = 0.0;
-        transformStamped.transform.translation.y = 0.0;
-        transformStamped.transform.translation.z = 0.0;
-    } else {
+    // std::string frames = tf_buffer.allFramesAsString();
+    // printf("%s\n", frames.c_str());
+ 
+    if(!rvec.empty() && !tvec.empty()){
         tf2::Vector3 translation(tvec.at<double>(0), tvec.at<double>(1), tvec.at<double>(2));
 
         cv::Mat rotationMatrix;
@@ -445,11 +444,9 @@ void FindMarkers::publishTransform(cv::Mat rvec, cv::Mat tvec, std_msgs::Header 
         transformStamped.transform.translation.z = translation[2];
     }
 
-    // Find on which topic to publish
-    int kinect_number = FindMarkers::findInteger(header.frame_id);
-
-    transformPub_[kinect_number-1].publish(transformStamped);
+    transformPub_.publish(transformStamped);
 }
+
 
 double FindMarkers::findInteger(std::string str){
     // Finds the first and last position where a digit appears
@@ -470,6 +467,7 @@ double FindMarkers::findInteger(std::string str){
     return integer;
 }
 
+/*
 void FindMarkers::transformCallback(const geometry_msgs::TransformStampedConstPtr& transf1, const geometry_msgs::TransformStampedConstPtr& transf2, 
                 const geometry_msgs::TransformStampedConstPtr& transf3, const geometry_msgs::TransformStampedConstPtr& transf4, 
                 const geometry_msgs::TransformStampedConstPtr& transf5){
@@ -491,10 +489,11 @@ void FindMarkers::transformCallback(const geometry_msgs::TransformStampedConstPt
             transform = FindMarkers::createTransform(positions, transf2->header.frame_id, transf3->header.frame_id);
         }
 
-        static_broadcaster.sendTransform(transform);
+        static_broadcaster_.sendTransform(transform);
     }   
 
 }
+*/
 
 cv::Mat FindMarkers::computePosition(geometry_msgs::Transform pos1, geometry_msgs::Transform pos2){
     cv::Mat output(4, 4, CV_64FC1);

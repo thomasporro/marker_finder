@@ -36,29 +36,28 @@ private:
 
     struct Params{
         int queue{1000};
-        std::string outTopic{"image"};
+        std::string outTopic{"/k01/transform"};
         std::string inTopic{"/k01/ir/image_rect"};
-        std::string infoTopic{"/k01/ir/camera_info"};
     };
 
     Params params_;
     ros::NodeHandle nodeHandle_{"~"};
 
     image_transport::ImageTransport tsp_;
-    image_transport::CameraSubscriber kinect1_, kinect2_, kinect3_, kinect4_, kinect5_;
+    image_transport::CameraSubscriber kinect_;
 
-    ros::Publisher pub_;
+    ros::Publisher transformPub_;
     message_filters::Subscriber<geometry_msgs::TransformStamped> transform_sub_[5];
     typedef message_filters::sync_policies::ApproximateTime<geometry_msgs::TransformStamped, geometry_msgs::TransformStamped, 
                 geometry_msgs::TransformStamped, geometry_msgs::TransformStamped, geometry_msgs::TransformStamped> MySyncPolicy;
     typedef message_filters::Synchronizer<MySyncPolicy> Sync;
     boost::shared_ptr<Sync> sync_;
 
-    // Publisher for the relative position of the camera respect to the wan
-    ros::Publisher transformPub_[5];
-    tf2_ros::StaticTransformBroadcaster static_broadcaster;
-    // Boolean to check if a frame is already a child
-    bool isChild_[5] = {1};
+    // // Publisher for the relative position of the camera respect to the wan
+    // ros::Publisher transformPub_[5];
+    // tf2_ros::StaticTransformBroadcaster static_broadcaster_;
+    // // Boolean to check if a frame is already a child
+    // bool isChild_[5] = {1};
 
     //Debugging the opencv part
     ros::Publisher blur_;
