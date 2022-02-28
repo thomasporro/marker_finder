@@ -9,16 +9,39 @@
 <group ns="marker_finder">
     <arg name="queue"       default="1000"  />
     <arg name="inTopic"     default="/k01/ir/image_rect" /> <!-- /k01/ir/image_rect  /kinect2/sd/image_ir_rect-->
-    <arg name="infoTopic"   default="/k01/ir/camera_info"/> <!--/k01/ir/camera_info  /kinect2/sd/camera_info-->
-    <arg name="outTopic"    default="image" />
+    <arg name="outTopic"    default="/k01/transform" />
 
-    <node pkg="marker_finder" type="node" name="finder" output="screen">
+    <node pkg="marker_finder" type="node" name="finder1" output="screen">
         <param name="queue"          value="$(arg queue)"            />
         <param name="outTopic"       value="$(arg outTopic)"        />
         <param name="inTopic"        value="$(arg inTopic)"         />
-        <param name="infoTopic"      value="$(arg infoTopic)"         />
-
     </node>
+
+    <node pkg="marker_finder" type="node" name="finder2" output="screen">
+        <param name="queue"          value="$(arg queue)"            />
+        <param name="outTopic"       value="/k02/transform"        />
+        <param name="inTopic"        value="/k02/ir/image_rect"         />
+    </node>
+
+    <node pkg="marker_finder" type="node" name="finder3" output="screen">
+        <param name="queue"          value="$(arg queue)"            />
+        <param name="outTopic"       value="/k03/transform"       />
+        <param name="inTopic"        value="/k03/ir/image_rect"         />
+    </node>
+
+    <node pkg="marker_finder" type="node" name="finder4" output="screen">
+        <param name="queue"          value="$(arg queue)"            />
+        <param name="outTopic"       value="/k04/transform"       />
+        <param name="inTopic"        value="/k04/ir/image_rect"          />
+    </node>
+
+    <node pkg="marker_finder" type="node" name="finder5" output="screen">
+        <param name="queue"          value="$(arg queue)"            />
+        <param name="outTopic"       value="/k05/transform"       />
+        <param name="inTopic"        value="/k05/ir/image_rect"         />
+    </node>
+
+
 </group>
 
 <node pkg="rqt_image_view" type="rqt_image_view" name="image_view"/>

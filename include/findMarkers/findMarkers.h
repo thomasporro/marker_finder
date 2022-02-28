@@ -38,6 +38,7 @@ private:
         int queue{1000};
         std::string outTopic{"/k01/transform"};
         std::string inTopic{"/k01/ir/image_rect"};
+        std::string debugTopic{"/k01/debug"};
     };
 
     Params params_;
@@ -55,17 +56,11 @@ private:
     typedef message_filters::Synchronizer<MySyncPolicy> Sync;
     boost::shared_ptr<Sync> sync_;
 
-    // // Publisher for the relative position of the camera respect to the wan
-    // ros::Publisher transformPub_[5];
-    // tf2_ros::StaticTransformBroadcaster static_broadcaster_;
-    // // Boolean to check if a frame is already a child
-    // bool isChild_[5] = {1};
-
     //Debugging the opencv part
-    ros::Publisher blur_;
-    ros::Publisher threshold_;
-    ros::Publisher dilate_;
-    ros::Publisher contours_;
+    ros::Publisher debug_;
+    // ros::Publisher threshold_;
+    // ros::Publisher dilate_;
+    // ros::Publisher contours_;
 
     std::string getImageEncoding();
     std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point2d>> findCenters(cv::Mat image, double imageWidth);

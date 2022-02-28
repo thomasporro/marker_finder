@@ -13,65 +13,49 @@ void FindMarkers::start(){
     nodeHandle_.getParam("queue", params_.queue);
     nodeHandle_.getParam("inTopic", params_.inTopic);
     nodeHandle_.getParam("outTopic", params_.outTopic);
+    nodeHandle_.getParam("debugTopic", params_.debugTopic);
 
     kinect_ = tsp_.subscribeCamera(params_.inTopic, params_.queue, &FindMarkers::listenerCallback, this);
 
     transformPub_ = nodeHandle_.advertise<geometry_msgs::TransformStamped>(params_.outTopic, 1000);
-    
-    // transformPub_[0] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform1", 1000);
-    // transformPub_[1] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform2", 1000);
-    // transformPub_[2] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform3", 1000);
-    // transformPub_[3] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform4", 1000);
-    // transformPub_[4] = nodeHandle_.advertise<geometry_msgs::TransformStamped>("transform5", 1000);
-
-    // transform_sub_[0].subscribe(nodeHandle_, "transform1", 1000);
-    // transform_sub_[1].subscribe(nodeHandle_, "transform2", 1000);
-    // transform_sub_[2].subscribe(nodeHandle_, "transform3", 1000);
-    // transform_sub_[3].subscribe(nodeHandle_, "transform4", 1000);
-    // transform_sub_[4].subscribe(nodeHandle_, "transform5", 1000);
-
-    // sync_.reset(new Sync(MySyncPolicy(10), transform_sub_[0], transform_sub_[1], transform_sub_[2],
-    //             transform_sub_[3], transform_sub_[4]));
-    // sync_->registerCallback(boost::bind(&FindMarkers::transformCallback, this, _1, _2, _3, _4, _5));
-
 
     // pub_ = nodeHandle_.advertise<sensor_msgs::Image>(params_.outTopic, 1);
-    blur_ = nodeHandle_.advertise<sensor_msgs::Image>("GaussianBlur", 1);
-    threshold_ = nodeHandle_.advertise<sensor_msgs::Image>("threshold", 1);
-    dilate_ = nodeHandle_.advertise<sensor_msgs::Image>("dilate", 1);
-    contours_ = nodeHandle_.advertise<sensor_msgs::Image>("contours", 1);
+    debug_ = nodeHandle_.advertise<sensor_msgs::Image>(params_.debugTopic, 1);
+    // threshold_ = nodeHandle_.advertise<sensor_msgs::Image>("threshold", 1);
+    // dilate_ = nodeHandle_.advertise<sensor_msgs::Image>("dilate", 1);
+    // contours_ = nodeHandle_.advertise<sensor_msgs::Image>("contours", 1);
 
 };
 
 std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point2d>> FindMarkers::findCenters(cv::Mat image, double imageWidth){
-    cv_bridge::CvImage imgBlur;
-    cv_bridge::CvImage imgThreshold;
-    cv_bridge::CvImage imgDilate;
-    cv_bridge::CvImage imgContours;
+    // cv_bridge::CvImage imgBlur;
+    // cv_bridge::CvImage imgThreshold;
+    // cv_bridge::CvImage imgDilate;
+    // cv_bridge::CvImage imgContours;
 
-    imgBlur.encoding = sensor_msgs::image_encodings::MONO8;
-    imgThreshold.encoding = sensor_msgs::image_encodings::MONO8;
-    imgDilate.encoding = sensor_msgs::image_encodings::MONO8;
-    imgContours.encoding = sensor_msgs::image_encodings::BGR8;
+    // imgBlur.encoding = sensor_msgs::image_encodings::MONO8;
+    // imgThreshold.encoding = sensor_msgs::image_encodings::MONO8;
+    // imgDilate.encoding = sensor_msgs::image_encodings::MONO8;
+    // imgContours.encoding = sensor_msgs::image_encodings::BGR8;
 
-    std_msgs::Header header;
-    header.stamp = ros::Time::now();
-    header.frame_id = "test";
+    // std_msgs::Header header;
+    // header.stamp = ros::Time::now();
+    // header.frame_id = "test";
 
-    imgBlur.header = header;
-    imgThreshold.header = header;
-    imgDilate.header = header;
-    imgContours.header = header;
+    // imgBlur.header = header;
+    // imgThreshold.header = header;
+    // imgDilate.header = header;
+    // imgContours.header = header;
     
     cv::Mat gray = image.clone();
 
     // cv::GaussianBlur(gray, gray, cv::Size(3, 3), 0, 0, cv::BORDER_DEFAULT);
-    imgBlur.image = gray.clone();
+    // imgBlur.image = gray.clone();
     cv::threshold(gray, gray, 180, 255, cv::THRESH_BINARY);
-    imgThreshold.image = gray.clone();
+    // imgThreshold.image = gray.clone();
 
     // Matrix used to dilate the image
-    cv::Mat element = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(3, 3));
+    cv::Mat element = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(2, 2));
     cv::dilate(gray, gray, element); 
     // imgDilate.image = gray.clone();
 
@@ -84,18 +68,17 @@ std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point2d>> FindMa
 
     if(allContours.size() != 0)
         cv::drawContours(colorata, allContours, -1, cv::Scalar(0, 0, 255), 1);
-    imgContours.image = colorata.clone();
+    // imgContours.image = colorata.clone();
 
     //blur_.publish(imgBlur.toImageMsg());
-    threshold_.publish(imgThreshold.toImageMsg());
-    dilate_.publish(imgDilate.toImageMsg());
-    contours_.publish(imgContours.toImageMsg());
+    // threshold_.publish(imgThreshold.toImageMsg());
+    // dilate_.publish(imgDilate.toImageMsg());
+    // contours_.publish(imgContours.toImageMsg());
 
 
     std::vector<std::vector<cv::Point>> contours;
     std::vector<cv::Point2d> centers;
     std::vector<cv::Moments> momentsContours;
-    // printf("image width: %f\n", imageWidth);
 
     // Checks for the length of the contour's perimeter and for its area,
     // then if computes if it fits in the formula of a circle. If it is true
@@ -104,16 +87,9 @@ std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point2d>> FindMa
         double perimeter = cv::arcLength(contour, true);
         double area = cv::contourArea(contour);
         double diameter = perimeter / M_PI;
-        // Skips the perimeters that are too small and if is present a too
-        // large perimetes it skips the entire frame
-        // printf("diameter: %f\n", diameter);
-        // if(diameter < FindMarkers::minDiameterRatio * imageWidth)
-        //     continue;
-        // else if(diameter > FindMarkers::maxDiameterRatio * imageWidth)
-        //     continue;
 
         double circularity = 4 * M_PI * (area / (perimeter * perimeter));
-        //printf("circularity: %f\n", circularity);
+        // Test
         if(/*circularity > minCircularity && circularity < maxCircularity*/ circularity > 0.70){
             contours.push_back(contour);
             momentsContours.push_back(cv::moments(contour));
@@ -131,7 +107,7 @@ std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point2d>> FindMa
     }
 
     // Trying the usage of a rectangle instead of the moments
-    // for(auto contour : contours){
+    // for(auto& contour : contours){
     //     cv::Rect rect = cv::boundingRect(contour);
     //     int centerX = rect.x + (rect.height / 2);
     //     int centerY = rect.y + (rect.width / 2);
@@ -202,7 +178,6 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
 
         if(collinear){
             // Brute force for creating matrix
-            // TODO search if it is possible to improve
             cv::Mat cameraMatrix(3, 3, CV_64FC1);
             for(int i = 0; i<info->K.size(); i++){
                 cameraMatrix.at<double>(i/3, i%3) = info->K.at(i);
@@ -265,7 +240,7 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
     imgPointerColor.encoding = sensor_msgs::image_encodings::BGR8;
     imgPointerColor.image = colorImage;
 
-    // pub_.publish(imgPointerColor.toImageMsg());
+    debug_.publish(imgPointerColor.toImageMsg());
     
 };
 
@@ -276,8 +251,8 @@ cv::Mat FindMarkers::drawMarkers(const cv::Mat& image, std::vector<std::vector<c
     cv::Mat tmpImage;
     cv::cvtColor(image, tmpImage, cv::COLOR_GRAY2BGR);
     
-    if(contours.size() != 0)
-        cv::drawContours(tmpImage, contours, -1, greenColor, 2);
+    // if(contours.size() != 0)
+    //     cv::drawContours(tmpImage, contours, -1, greenColor, 2);
 
     for(unsigned i = 0; i < centers.size(); i++){
         cv::circle(tmpImage, centers[i], 1, redColor, cv::FILLED);
@@ -413,15 +388,7 @@ void FindMarkers::publishTransform(cv::Mat rvec, cv::Mat tvec, std_msgs::Header 
     // Setting the message to be sent
     geometry_msgs::TransformStamped transformStamped;
     transformStamped.header = header;
-    // transformStamped.header.frame_id = "world";
-    // transformStamped.child_frame_id = header.frame_id;
     transformStamped.child_frame_id = "world";
-    // printf("%s\n", header.frame_id.c_str());
-    // tf2_ros::Buffer tf_buffer;
-    // tf2_ros::TransformListener tf_listener(tf_buffer);
-
-    // std::string frames = tf_buffer.allFramesAsString();
-    // printf("%s\n", frames.c_str());
  
     if(!rvec.empty() && !tvec.empty()){
         tf2::Vector3 translation(tvec.at<double>(0), tvec.at<double>(1), tvec.at<double>(2));
@@ -439,13 +406,13 @@ void FindMarkers::publishTransform(cv::Mat rvec, cv::Mat tvec, std_msgs::Header 
         transformStamped.transform.rotation.y = rotation.y();
         transformStamped.transform.rotation.z = rotation.z();
         transformStamped.transform.rotation.w = rotation.w();
-        transformStamped.transform.translation.x = translation[0];
-        transformStamped.transform.translation.y = translation[1];
-        transformStamped.transform.translation.z = translation[2];
+        transformStamped.transform.translation.x = translation.getX();
+        transformStamped.transform.translation.y = translation.getY();
+        transformStamped.transform.translation.z = translation.getZ();
+        transformPub_.publish(transformStamped);
+        tf_broadcaster_.sendTransform(transformStamped);
     }
 
-    transformPub_.publish(transformStamped);
-    tf_broadcaster_.sendTransform(transformStamped);
 }
 
 
@@ -467,34 +434,6 @@ double FindMarkers::findInteger(std::string str){
     int integer = atoi( str.substr(start, end-1).c_str());
     return integer;
 }
-
-/*
-void FindMarkers::transformCallback(const geometry_msgs::TransformStampedConstPtr& transf1, const geometry_msgs::TransformStampedConstPtr& transf2, 
-                const geometry_msgs::TransformStampedConstPtr& transf3, const geometry_msgs::TransformStampedConstPtr& transf4, 
-                const geometry_msgs::TransformStampedConstPtr& transf5){
-    
-    if(transf1->transform.translation.z!=0.0 && transf2->transform.translation.z!=0.0){
-        cv::Mat positions;
-        geometry_msgs::TransformStamped transform;
-
-        int n_transf1 = FindMarkers::findInteger(transf1->header.frame_id);
-        int n_transf2 = FindMarkers::findInteger(transf2->header.frame_id);
-        
-        // Check if the boolean the boolean values works
-        // At the moment is in test
-        if(isChild_[n_transf2 - 1] == false){
-            positions = computePosition(transf1->transform, transf2->transform);
-            transform = FindMarkers::createTransform(positions, transf1->header.frame_id, transf2->header.frame_id);
-        } else if(isChild_[n_transf1 - 1] == false){
-            positions = computePosition(transf2->transform, transf1->transform);
-            transform = FindMarkers::createTransform(positions, transf2->header.frame_id, transf3->header.frame_id);
-        }
-
-        static_broadcaster_.sendTransform(transform);
-    }   
-
-}
-*/
 
 cv::Mat FindMarkers::computePosition(geometry_msgs::Transform pos1, geometry_msgs::Transform pos2){
     cv::Mat output(4, 4, CV_64FC1);
@@ -585,7 +524,5 @@ bool FindMarkers::isBetween(cv::Point x, cv::Point z, cv::Point y){
     if(dotProduct > sqrtlength)
         return false;
 
-
     return true;
 }
-
