@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+
+<launch>
+
+  <param name="/use_sim_time" value="true" />
+
+  <arg name="bag_path" default="/home/thomas/Documenti/MasterThesis/bagfiles/calib_ir/filtered4.bag" />
+
+  <!-- Convert compressed images to raw images -->
+  <node pkg="image_transport" type="republish" name="republish_k01_depth" args="compressedDepth in:=/k01/depth/image_rect raw out:=/k01/depth/image_rect" />
+  <node pkg="image_transport" type="republish" name="republish_k01_ir" args="compressed in:=/k01/ir/image_rect raw out:=/k01/ir/image_rect" />
+
+  <node pkg="image_transport" type="republish" name="republish_k02_depth" args="compressedDepth in:=/k02/depth/image_rect raw out:=/k02/depth/image_rect" />
+  <node pkg="image_transport" type="republish" name="republish_k02_ir" args="compressed in:=/k02/ir/image_rect raw out:=/k02/ir/image_rect" />
+
+  <node pkg="image_transport" type="republish" name="republish_k03_depth" args="compressedDepth in:=/k03/depth/image_rect raw out:=/k03/depth/image_rect" />
+  <node pkg="image_transport" type="republish" name="republish_k03_ir" args="compressed in:=/k03/ir/image_rect raw out:=/k03/ir/image_rect" />
+
+  <node pkg="image_transport" type="republish" name="republish_k04_depth" args="compressedDepth in:=/k04/depth/image_rect raw out:=/k04/depth/image_rect" />
+  <node pkg="image_transport" type="republish" name="republish_k04_ir" args="compressed in:=/k04/ir/image_rect raw out:=/k04/ir/image_rect" />
+
+  <node pkg="image_transport" type="republish" name="republish_k05_depth" args="compressedDepth in:=/k05/depth/image_rect raw out:=/k05/depth/image_rect" />
+  <node pkg="image_transport" type="republish" name="republish_k05_ir" args="compressed in:=/k05/ir/image_rect raw out:=/k05/ir/image_rect" />
+
+  <!-- Play bag -->
+  <node pkg="rosbag" type="play" name="player" output="screen" required="true" args="--clock --quiet --pause $(arg bag_path)" />
+
+</launch>
