@@ -1,0 +1,57 @@
+<launch>
+
+
+<group ns="marker_finder">
+    <arg name="queue"       default="1000"  />
+    <arg name="inTopic"     default="/k01/ir/image_rect" /> <!-- /k01/ir/image_rect  /kinect2/sd/image_ir_rect-->
+    <arg name="outTopic"    default="/k01/transform" />
+    <arg name="debugTopic"    default="/k01/debug" />
+
+    <node pkg="marker_finder" type="node" name="finder1" output="screen">
+        <param name="queue"          value="$(arg queue)"            />
+        <param name="outTopic"       value="$(arg outTopic)"        />
+        <param name="inTopic"        value="$(arg inTopic)"         />
+        <param name="debugTopic"        value="$(arg debugTopic)"         />
+    </node>
+
+    <node pkg="marker_finder" type="node" name="finder2" output="screen">
+        <param name="queue"          value="$(arg queue)"            />
+        <param name="outTopic"       value="/k02/transform"        />
+        <param name="inTopic"        value="/k02/ir/image_rect"         />
+        <param name="debugTopic"        value="/k02/debug"         />
+    </node>
+
+    <node pkg="marker_finder" type="node" name="finder3" output="screen">
+        <param name="queue"          value="$(arg queue)"            />
+        <param name="outTopic"       value="/k03/transform"       />
+        <param name="inTopic"        value="/k03/ir/image_rect"         />
+        <param name="debugTopic"        value="/k03/debug"         />
+    </node>
+
+    <node pkg="marker_finder" type="node" name="finder4" output="screen">
+        <param name="queue"          value="$(arg queue)"            />
+        <param name="outTopic"       value="/k04/transform"       />
+        <param name="inTopic"        value="/k04/ir/image_rect"          />
+        <param name="debugTopic"        value="/k04/debug"         />
+    </node>
+
+    <node pkg="marker_finder" type="node" name="finder5" output="screen">
+        <param name="queue"          value="$(arg queue)"            />
+        <param name="outTopic"       value="/k05/transform"       />
+        <param name="inTopic"        value="/k05/ir/image_rect"         />
+        <param name="debugTopic"        value="/k05/debug"         />
+    </node>
+</group>
+
+<group ns="calibration">
+    <arg name="node_name"                          default="calibration"  />
+    <node pkg="wand_calibration" type="node" name="$(arg node_name)" output="screen">
+        <rosparam command="load" file="$(find wand_calibration)/config/network.yaml" />
+        <param name="node_name" type="str" value="$(arg node_name)" />
+        <param name="max_pose_stdev" type="double" value="0.005" />
+    </node>
+</group>
+
+
+
+</launch>
