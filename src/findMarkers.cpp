@@ -5,6 +5,7 @@
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <tf2_ros/transform_listener.h>
+#include "tf2/LinearMath/Transform.h"
 
 #include <cmath>
 
@@ -401,8 +402,6 @@ std::vector<cv::Point2d> FindMarkers::orderPoints(std::vector<cv::Point2d> point
     }
     return outputPoints;
 }
-
-#include "tf2/LinearMath/Transform.h"
 
 void FindMarkers::publishTransform(cv::Mat rvec, cv::Mat tvec, std_msgs::Header header){
     // Setting the message to be sent
