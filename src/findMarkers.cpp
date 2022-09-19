@@ -17,69 +17,36 @@ void FindMarkers::start(){
     nodeHandle_.getParam("debugTopic", params_.debugTopic);
 
     kinect_ = tsp_.subscribeCamera(params_.inTopic, params_.queue, &FindMarkers::listenerCallback, this);
-
     transformPub_ = nodeHandle_.advertise<geometry_msgs::TransformStamped>(params_.outTopic, 1000);
 
-    // pub_ = nodeHandle_.advertise<sensor_msgs::Image>(params_.outTopic, 1);
     debug_ = nodeHandle_.advertise<sensor_msgs::Image>(params_.debugTopic, 1);
-    // threshold_ = nodeHandle_.advertise<sensor_msgs::Image>("threshold", 1);
-    // dilate_ = nodeHandle_.advertise<sensor_msgs::Image>("dilate", 1);
-    // contours_ = nodeHandle_.advertise<sensor_msgs::Image>("contours", 1);
-
 };
 
+
 std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point2d>> FindMarkers::findCenters(cv::Mat image, double imageWidth){
-    // cv_bridge::CvImage imgBlur;
-    // cv_bridge::CvImage imgThreshold;
-    // cv_bridge::CvImage imgDilate;
-    // cv_bridge::CvImage imgContours;
 
-    // imgBlur.encoding = sensor_msgs::image_encodings::MONO8;
-    // imgThreshold.encoding = sensor_msgs::image_encodings::MONO8;
-    // imgDilate.encoding = sensor_msgs::image_encodings::MONO8;
-    // imgContours.encoding = sensor_msgs::image_encodings::BGR8;
-
-    // std_msgs::Header header;
-    // header.stamp = ros::Time::now();
-    // header.frame_id = "test";
-
-    // imgBlur.header = header;
-    // imgThreshold.header = header;
-    // imgDilate.header = header;
-    // imgContours.header = header;
+    std_msgs::Header header;
+    header.stamp = ros::Time::now();
+    header.frame_id = "pose";
     
     cv::Mat gray = image.clone();
+    
+    cv::threshold(gray, gray, 100, 255, cv::THRESH_TOZERO);
+    cv::GaussianBlur(gray, gray, cv::Size(3, 3), 0, 0, cv::BORDER_CONSTANT);
+    cv::threshold(gray, gray, 100, 255, cv::THRESH_BINARY);
 
-    // cv::GaussianBlur(gray, gray, cv::Size(3, 3), 0, 0, cv::BORDER_DEFAULT);
-    // imgBlur.image = gray.clone();
-    cv::threshold(gray, gray, 180, 255, cv::THRESH_BINARY);
-    // imgThreshold.image = gray.clone();
 
     // Matrix used to dilate the image
     cv::Mat element = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(2, 2));
-    cv::dilate(gray, gray, element); 
-    // imgDilate.image = gray.clone();
 
+    // Retrieve all the contours in the image
     std::vector<std::vector<cv::Point>> allContours; 
     std::vector<cv::Vec4i> hier;
     cv::findContours(gray, allContours, hier, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
 
-    cv::Mat colorata;
-    cv::cvtColor(gray, colorata, cv::COLOR_GRAY2BGR);
-
-    if(allContours.size() != 0)
-        cv::drawContours(colorata, allContours, -1, cv::Scalar(0, 0, 255), 1);
-    // imgContours.image = colorata.clone();
-
-    //blur_.publish(imgBlur.toImageMsg());
-    // threshold_.publish(imgThreshold.toImageMsg());
-    // dilate_.publish(imgDilate.toImageMsg());
-    // contours_.publish(imgContours.toImageMsg());
-
-
     std::vector<std::vector<cv::Point>> contours;
     std::vector<cv::Point2d> centers;
-    std::vector<cv::Moments> momentsContours;
+    std::vector<cv::Point2f> encloCircle;
 
     // Checks for the length of the contour's perimeter and for its area,
     // then if computes if it fits in the formula of a circle. If it is true
@@ -89,31 +56,21 @@ std::tuple<std::vector<std::vector<cv::Point>>, std::vector<cv::Point2d>> FindMa
         double area = cv::contourArea(contour);
         double diameter = perimeter / M_PI;
 
+        //Find the markers that respect the rules
         double circularity = 4 * M_PI * (area / (perimeter * perimeter));
-        // Test
-        if(/*circularity > minCircularity && circularity < maxCircularity*/ circularity > 0.70){
+        if(circularity > minCircularity){
             contours.push_back(contour);
-            momentsContours.push_back(cv::moments(contour));
+
+            cv::Point2f single_point;
+            float radius;
+            cv::minEnclosingCircle( contour, single_point, radius);
+            encloCircle.push_back(single_point);
         }
     }
 
-    //Checking if the dimensions of the circles are similar
-
-
-    // Compute the centers using the moments
-    for(const auto& moment: momentsContours){
-        int centerX = static_cast<int>(moment.m10/(moment.m00 + 1e-5));
-        int centerY = static_cast<int>(moment.m01/(moment.m00 + 1e-5));
-        centers.push_back(cv::Point2d(centerX, centerY));
+    for(const auto& center: encloCircle){
+        centers.push_back(cv::Point2d(center.x, center.y));
     }
-
-    // Trying the usage of a rectangle instead of the moments
-    // for(auto& contour : contours){
-    //     cv::Rect rect = cv::boundingRect(contour);
-    //     int centerX = rect.x + (rect.height / 2);
-    //     int centerY = rect.y + (rect.width / 2);
-    //     centers.push_back(cv::Point2d(centerX, centerY));
-    // }
 
     return std::make_tuple(contours, centers);
 };
@@ -136,7 +93,7 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
         tmpImage = FindMarkers::convertImage(imgPointer->image, image->encoding);
 
         // Mask to remove part of the image where the IR light is reflected by others kinects
-        // it happens only with the kinect number one and four
+        // it happens only with the kinect number one and four of the test footage
         cv::Mat mask = cv::Mat::zeros(image->height, image->width, tmpImage.type());
         int n_kinect = FindMarkers::findInteger(info->header.frame_id);
         cv::Scalar whiteColor(255, 255, 255);
@@ -148,6 +105,7 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
         }
         cv::subtract(tmpImage, mask, tmpImage);
         
+        //Actually finding the centers
         cont_cent = FindMarkers::findCenters(tmpImage, image->width);
     } catch (cv::Exception e) {
         ROS_ERROR("Error while finding the centers of the markers: %s\n", e.what());
@@ -162,31 +120,15 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
 
     std::vector<cv::Point2d> projectedPoints;
 
-    cv::Mat rvec, tvec;
-    // cv::Mat rvec(3, 1, CV_64FC1);
-    // cv::Mat tvec(3, 1, CV_64FC1);
-    // for (int i = 0; i < 3; i++) {
-    //     rvec.at<double>(i, 0) = 0.0f;
-    //     tvec.at<double>(i, 0) = 0.0f;
-    // }
-    
+    cv::Mat rvec, tvec;    
 
     int collinear = 1;
-    if(std::get<1>(cont_cent).size()==5){
-        std::vector<cv::Point3d> objectPoints{cv::Point3d(0.0, 0.0, 0.0), cv::Point3d(0.2, 0.0, 0.0), 
-                    cv::Point3d(0.3, 0.0, 0.0), cv::Point3d(0.2, 0.125, 0.0), cv::Point3d(0.2, 0.25, 0.0)};
+    if(std::get<1>(cont_cent).size()==5){ 
+        std::vector<cv::Point3d> objectPoints{cv::Point3d(0.0, 0.250, 0.0), cv::Point3d(0.2, 0.250, 0.0), 
+                    cv::Point3d(0.3, 0.250, 0.0), cv::Point3d(0.2, 0.125, 0.0), cv::Point3d(0.2, 0.0, 0.0)};
 
         // Orders the point to be consistent with the objects points
         std::vector<cv::Point2d> orderedImagePoints = FindMarkers::orderPoints(std::get<1>(cont_cent));
-
-        //DEBUGGING
-        // if(FindMarkers::findInteger(info->header.frame_id)==2){
-        //     printf("Points: ");
-        //     for (int i = 0; i < 5; i++) {
-        //         printf("(%f, %f) ", orderedImagePoints[i].x, orderedImagePoints[i].y);
-        //     }
-        //     printf("\n");
-        // }
 
         std::vector<cv::Point2d> imagePoints;
         for(int i=0; i<orderedImagePoints.size();i++){
@@ -204,29 +146,26 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
             }
 
             cv::solvePnP(objectPoints, imagePoints, cameraMatrix, info->D, rvec, tvec, false, cv::SOLVEPNP_ITERATIVE);
-            // cv::solvePnPRansac(objectPoints, imagePoints, cameraMatrix, info->D, rvec, tvec, false, 1000, 1.5, 0.99, cv::noArray(), cv::SOLVEPNP_EPNP);
             
             // Converts the rotation matrix into rotation vector
             cv::Mat rotationMatrix;
             cv::Rodrigues(rvec, rotationMatrix);
 
             // Computing the mean error of solvePnP by reprojecting the objects point into
-            // the camera plane
-            cv::projectPoints(objectPoints, rvec, tvec, cameraMatrix, info->D, projectedPoints);
+            // the camera plane. Uncomment this line to print its value
+            // cv::projectPoints(objectPoints, rvec, tvec, cameraMatrix, info->D, projectedPoints);
             // double meanError = cv::norm(imagePoints, projectedPoints, cv::NORM_L2);
             // printf("Error on reprojection: %f\n", meanError);
 
-            // Debugging lines
+            // Compute the points that will represent the plane in debug_
             cv::projectPoints(planePoints, rvec, tvec, cameraMatrix, info->D, projectedPlanePoints);
+            
 
             cv::Mat translateRotation;
             cv::transpose(rotationMatrix, translateRotation);
 
             //Finds the camera coordinates by inverting the projection matrix
             cv::Mat wrlCoordinates = (-translateRotation) * tvec;
-
-            // printf("Coordinates: %f %f %f\n", wrlCoordinates.at<double>(0, 0), 
-            //         wrlCoordinates.at<double>(0, 1), wrlCoordinates.at<double>(0, 2));
         }
     }
     
@@ -237,7 +176,6 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
         FindMarkers::publishTransform(rvec, tvec, image->header);
 
         colorImage = FindMarkers::drawMarkers(tmpImage, std::get<0>(cont_cent), projectedPoints);
-        // colorImage = FindMarkers::drawMarkers(tmpImage, std::get<0>(cont_cent), std::get<1>(cont_cent));
 
         // Draw the bounding box that show us the plane
         cv::Scalar blueColor(255, 0, 0);
@@ -250,8 +188,7 @@ void FindMarkers::listenerCallback(const sensor_msgs::ImageConstPtr& image, cons
         planePoints.clear();
         cv::polylines(colorImage, finalPoints, true, blueColor, thickness, cv::FILLED, 0);
         
-    }
-    else{
+    } else {
         colorImage = FindMarkers::drawMarkers(tmpImage, std::get<0>(cont_cent), std::get<1>(cont_cent));
     }
 
@@ -270,9 +207,6 @@ cv::Mat FindMarkers::drawMarkers(const cv::Mat& image, std::vector<std::vector<c
     
     cv::Mat tmpImage;
     cv::cvtColor(image, tmpImage, cv::COLOR_GRAY2BGR);
-    
-    // if(contours.size() != 0)
-    //     cv::drawContours(tmpImage, contours, -1, greenColor, 2);
 
     for(unsigned i = 0; i < centers.size(); i++){
         cv::circle(tmpImage, centers[i], 1, redColor, cv::FILLED);
@@ -308,15 +242,10 @@ cv::Mat FindMarkers::convertImage(const cv::Mat& image, const std::string encodi
     return tmpImage;
 }
 
-// TODO possible improvings: 
-// - mask to detect the mean color value in order to discard the point that
-//   are in the dark (is it correct? i don't think so)
-// - check that all the circles found must have a similar size
-
 std::vector<cv::Point2d> FindMarkers::orderPoints(std::vector<cv::Point2d> points){
 
-    // Check for the area of the triangle for 3 points to find
-    // the ones that are on the same line
+    // Check the cross product of 3 points to find
+    // if they are on the same line
     std::vector<std::vector<cv::Point2d>> lines;
     for(int i = 0; i < points.size() - 2; i++){
         for(int j = i + 1; j < points.size() - 1; j++){
@@ -420,45 +349,35 @@ void FindMarkers::publishTransform(cv::Mat rvec, cv::Mat tvec, std_msgs::Header 
         tf2::Quaternion rotation;
         tfMatrix.getRotation(rotation);
 
-        // Setting the message to be sent
-        transformStamped.transform.rotation.x = rotation.x();
-        transformStamped.transform.rotation.y = rotation.y();
-        transformStamped.transform.rotation.z = rotation.z();
-        transformStamped.transform.rotation.w = rotation.w();
-        transformStamped.transform.translation.x = translation.getX();
-        transformStamped.transform.translation.y = translation.getY();
-        transformStamped.transform.translation.z = translation.getZ();
-        // transformPub_.publish(transformStamped);
-        // tf_broadcaster_.sendTransform(transformStamped);
+        tf2::Transform pose(rotation.normalize(), translation);
 
-        //TESTS
-        int id = findInteger(transformStamped.header.frame_id);
-        // transformStamped.header.frame_id = "world";
-        // transformStamped.child_frame_id = std::to_string(id);
-        
-        tf2::Transform test(rotation, translation);
-        test = test.inverse();
+        // Trasform that change the axis direction according to ROS documentation
+        tf2::Vector3 no_translation(0.0, 0.0, 0.0);
+        double roll, pitch, yaw;
+        yaw = 0;
+        pitch = -90 * CV_PI / 180; 
+        roll = 90 * CV_PI / 180; 
+        tf2::Matrix3x3 axis_rotation;
+        axis_rotation.setEulerYPR(yaw, pitch, roll);
+        tf2::Quaternion axis_quaternion;
+        axis_rotation.getRotation(axis_quaternion);
+        tf2::Transform axis_transform(axis_quaternion.normalize(), no_translation);
 
-        //DEBUGGING
-        // if(FindMarkers::findInteger(header.frame_id)==2){
-        //     printf("x: %f   y: %f   z: %f   w: %f\n",
-        //            test.getRotation().getX(),
-        //            test.getRotation().getY(),
-        //            test.getRotation().getZ(),
-        //            test.getRotation().getW());
-        // }
+        // Inverts and change rotation of the transform
+        pose = pose.inverse() * axis_transform;
 
-        transformStamped.transform.rotation.x = test.getRotation().getX();
-        transformStamped.transform.rotation.y = test.getRotation().getY();
-        transformStamped.transform.rotation.z = test.getRotation().getZ();
-        transformStamped.transform.rotation.w = test.getRotation().getW();
-        transformStamped.transform.translation.x = test.getOrigin().getX();
-        transformStamped.transform.translation.y = test.getOrigin().getY();
-        transformStamped.transform.translation.z = test.getOrigin().getZ();
+        transformStamped.transform.rotation.x = pose.getRotation().getX();
+        transformStamped.transform.rotation.y = pose.getRotation().getY();
+        transformStamped.transform.rotation.z = pose.getRotation().getZ();
+        transformStamped.transform.rotation.w = pose.getRotation().getW();
+        transformStamped.transform.translation.x = pose.getOrigin().getX();
+        transformStamped.transform.translation.y = pose.getOrigin().getY();
+        transformStamped.transform.translation.z = pose.getOrigin().getZ();
         transformPub_.publish(transformStamped);
 
+        int camera_id = findInteger(transformStamped.header.frame_id);
         transformStamped.header.frame_id = "world";
-        transformStamped.child_frame_id = std::to_string(id);
+        transformStamped.child_frame_id = std::to_string(camera_id);
         tf_broadcaster_.sendTransform(transformStamped);
     }
 }
@@ -481,86 +400,6 @@ double FindMarkers::findInteger(std::string str){
 
     int integer = atoi( str.substr(start, end-1).c_str());
     return integer;
-}
-
-cv::Mat FindMarkers::computePosition(geometry_msgs::Transform pos1, geometry_msgs::Transform pos2){
-    cv::Mat output(4, 4, CV_64FC1);
-    output.at<double>(3, 3) = 1.0;
-
-    tf2::Matrix3x3 preliminaryRotation1(tf2::Quaternion(pos1.rotation.x, 
-                pos1.rotation.y, pos1.rotation.z, pos1.rotation.w));
-    tf2::Matrix3x3 preliminaryRotation2(tf2::Quaternion(pos2.rotation.x, 
-                pos2.rotation.y, pos2.rotation.z, pos2.rotation.w));
-    
-    // Initialization of the rotation matrices
-    cv::Mat rotation1(3, 3, CV_64FC1);
-    cv::Mat rotation2(3, 3, CV_64FC1);
-    for(int i = 0; i < 3; i++){
-        rotation1.at<double>(i, 0) = preliminaryRotation1[0].getX();
-        rotation1.at<double>(i, 1) = preliminaryRotation1[0].getY();
-        rotation1.at<double>(i, 2) = preliminaryRotation1[0].getZ();
-
-        rotation2.at<double>(i, 0) = preliminaryRotation2[0].getX();
-        rotation2.at<double>(i, 1) = preliminaryRotation2[0].getY();
-        rotation2.at<double>(i, 2) = preliminaryRotation2[0].getZ();
-    }   
-
-    // Initialization of the translation vectors
-    cv::Mat translation1(3, 1, CV_64FC1);
-    cv::Mat translation2(3, 1, CV_64FC1);
-
-    translation1.at<double>(0, 0) = pos1.translation.x;
-    translation1.at<double>(1, 0) = pos1.translation.y;
-    translation1.at<double>(2, 0) = pos1.translation.z;
-
-    translation2.at<double>(0, 0) = pos2.translation.x;
-    translation2.at<double>(1, 0) = pos2.translation.y;
-    translation2.at<double>(2, 0) = pos2.translation.z;
-    
-    cv::Mat finalRotation(3, 3, CV_64FC1);
-    cv::Mat finalTranslation(3, 3, CV_64FC1);
-
-    // Actual code to compute the tranformation
-    finalRotation = rotation2.t() * rotation1;
-    finalTranslation = rotation2.t() * (translation1 - translation2);
-
-    // Filling the output matrix
-    // In Rect documentation the inialization is based on x, y, width, height,
-    // so the concept of row, col is inverted
-    cv::Rect rect_rot(0, 0, finalRotation.cols, finalRotation.rows);
-    cv::Rect rect_transl(3, 0, finalTranslation.cols, finalTranslation.rows);
-    cv::Mat output_R = output(rect_rot);
-    cv::Mat output_T = output(rect_transl);
-    finalRotation.copyTo(output_R);
-    finalTranslation.copyTo(output_T);
-
-    return output;
-}
-
-geometry_msgs::TransformStamped FindMarkers::createTransform(cv::Mat matrix, std::string head_frame_id, std::string child_frame_id){
-    geometry_msgs::TransformStamped transform;
-    transform.header.stamp = ros::Time::now();
-    transform.header.frame_id = head_frame_id;
-    transform.child_frame_id = child_frame_id;
-
-    tf2::Vector3 translation(matrix.at<double>(3, 0), matrix.at<double>(3, 1), matrix.at<double>(3, 2));
-    tf2::Matrix3x3 tfMatrix(matrix.at<double>(0, 0), matrix.at<double>(0, 1), matrix.at<double>(0, 2),
-                            matrix.at<double>(1, 0), matrix.at<double>(1, 1), matrix.at<double>(1, 2),
-                            matrix.at<double>(2, 0), matrix.at<double>(2, 1), matrix.at<double>(2, 2));
-
-    tf2::Quaternion rotation;
-    tfMatrix.getRotation(rotation);
-
-    // Setting the message to be sent
-    transform.transform.rotation.x = rotation.x();
-    transform.transform.rotation.y = rotation.y();
-    transform.transform.rotation.z = rotation.z();
-    transform.transform.rotation.w = rotation.w();
-    transform.transform.translation.x = translation[0];
-    transform.transform.translation.y = translation[1];
-    transform.transform.translation.z = translation[2];
-
-    return transform;
 }
 
 bool FindMarkers::isBetween(cv::Point x, cv::Point z, cv::Point y){
